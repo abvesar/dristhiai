@@ -1,0 +1,37 @@
+{
+  "architectures": [
+    "MobileNetV2ForImageClassification"
+  ],
+  "classifier_dropout_prob": 0.2,
+  "depth_divisible_by": 8,
+  "depth_multiplier": 1.0,
+  "dtype": "float32",
+  "expand_ratio": 6,
+  "finegrained_output": true,
+  "first_layer_is_expansion": true,
+  "hidden_act": "relu6",
+  "id2label": {
+    "0": "alert_normal",
+    "1": "drowsy",
+    "2": "distracted",
+    "3": "yawning",
+    "4": "phone_use"
+  },
+  "image_size": 224,
+  "initializer_range": 0.02,
+  "label2id": {
+    "alert_normal": 0,
+    "distracted": 2,
+    "drowsy": 1,
+    "phone_use": 4,
+    "yawning": 3
+  },
+  "layer_norm_eps": 0.001,
+  "min_depth": 8,
+  "model_type": "mobilenet_v2",
+  "num_channels": 3,
+  "output_stride": 32,
+  "semantic_loss_ignore_index": 255,
+  "tf_padding": true,
+  "transformers_version": "5.17.0"
+}
