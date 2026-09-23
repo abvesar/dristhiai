@@ -1,13 +1,30 @@
 import os
 import time
 
-from flask import Flask, Response, render_template_string
+from flask import Flask, Response, jsonify, render_template_string
 import cv2
 import numpy as np
 from ai_tracking.driver_monitor import DrishtiAIDMS
 
 app = Flask(__name__)
 dms_system = DrishtiAIDMS()
+
+latest_telemetry = {
+    "drowsy": False,
+    "distracted": False,
+    "yawning": False,
+    "phone_usage": False,
+    "driver_id": "CONNECTING...",
+    "face_recognized": False,
+    "face_detected": False,
+    "risk_level": "NORMAL",
+    "risk_score": 0.0,
+    "ear": 0.0,
+    "mar": 0.0,
+    "emotion": "PENDING",
+    "emotion_score": 0.0,
+    "reasons": [],
+}
 
 camera_source = os.environ.get("DRISHTI_CAMERA_SOURCE", "0")
 if camera_source.isdigit():
@@ -163,7 +180,26 @@ def generate_frames():
             0.5,
             (255, 255, 255),
             1,
-        )
+        # Update live shared telemetry
+        if alerts:
+            edge = alerts.get("edge_ai", {})
+            latest_telemetry = {
+                "drowsy": bool(alerts.get("drowsy")),
+                "distracted": bool(alerts.get("distracted")),
+                "yawning": bool(alerts.get("yawning")),
+                "phone_usage": bool(alerts.get("phone_usage")),
+                "driver_id": str(alerts.get("driver_id", "UNKNOWN")),
+                "face_recognized": bool(alerts.get("face_recognized")),
+                "face_detected": bool(alerts.get("face_detected")),
+                "risk_level": str(edge.get("risk_level", "NORMAL")),
+                "risk_score": float(edge.get("risk_score", 0.0)),
+                "ear": round(float(alerts.get("ear", 0.0)), 3),
+                "mar": round(float(alerts.get("mar", 0.0)), 3),
+                "emotion": str(hf.get("emotion", "N/A")),
+                "emotion_score": float(hf.get("score", 0.0)),
+                "reasons": list(edge.get("reasons", [])),
+                "status_text": status_text,
+            }
 
         ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if not ret:
@@ -180,6 +216,10 @@ def generate_frames():
 def video_feed():
     # Returns the streaming response using the content type multipart/x-mixed-replace
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/api/telemetry')
+def api_telemetry():
+    return jsonify(latest_telemetry)
 
 @app.route('/')
 def index():
