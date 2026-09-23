@@ -72,6 +72,47 @@ class SafetyCoreTests(unittest.TestCase):
         self.assertGreaterEqual(result["risk_score"], 0.8)
         self.assertGreater(result["confidence"], 0.5)
 
+    def test_distraction_alone_at_normal_speed_is_moderate_risk(self) -> None:
+        monitor = DriverBehaviorMonitor(speeding_threshold_kph=80.0)
+        signal = DriverBehaviorSignal(
+            driver_id="drv_001",
+            vehicle_id="veh_001",
+            distraction_score=0.85,
+            speed_kph=60.0,
+            timestamp_ms=1000,
+        )
+        result = monitor.evaluate(signal, now_ms=1000)
+        self.assertEqual(result.risk_level, DriverRiskLevel.MODERATE)
+        self.assertEqual(result.recommended_transmission, "cloud")
+        self.assertIn("distraction_high", result.reasons)
+        self.assertNotIn("speeding_detected", result.reasons)
+
+    def test_distraction_plus_speed_over_80_escalates_to_high_risk_satellite(self) -> None:
+        monitor = DriverBehaviorMonitor(speeding_threshold_kph=80.0)
+        signal = DriverBehaviorSignal(
+            driver_id="drv_001",
+            vehicle_id="veh_001",
+            distraction_score=0.85,
+            speed_kph=85.0,
+            timestamp_ms=1000,
+        )
+        result = monitor.evaluate(signal, now_ms=1000)
+        self.assertEqual(result.risk_level, DriverRiskLevel.HIGH)
+        self.assertEqual(result.recommended_transmission, "satellite")
+        self.assertIn("distraction_high", result.reasons)
+        self.assertIn("speeding_detected", result.reasons)
+
+    def test_edge_ai_speed_intercept_escalation(self) -> None:
+        classifier = EdgeAIClassifier()
+        # Normal speed with distraction -> MODERATE
+        mod_result = classifier.classify(distracted=True, speed_kph=60.0)
+        self.assertEqual(mod_result["risk_level"], "MODERATE")
+        # Overspeed (>= 80 km/h) with distraction -> Escalates to HIGH
+        high_result = classifier.classify(distracted=True, speed_kph=85.0)
+        self.assertEqual(high_result["risk_level"], "HIGH")
+        self.assertIn("speeding_detected", high_result["reasons"])
+        self.assertIn("distraction_high", high_result["reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()

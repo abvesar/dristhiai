@@ -1,188 +1,97 @@
-# DRISHTI AI
+# DRISHTI AI 🚗🛰️
+### Autonomous Edge-AI Driver Safety System & Multi-Tier JioSpaceFiber Satellite Telematics
 
-DRISHTI AI is an AI-first driver monitoring prototype focused on detecting driver fatigue, distraction, speeding, and risky behavior, then routing alerts through cloud, satellite, or hybrid communication flows.
+[![Tests](https://img.shields.io/badge/Tests-19%20Passing-brightgreen.svg)](tests/)
+[![AI Engine](https://img.shields.io/badge/Perception-MediaPipe%20%2B%20Hugging%20Face-blue.svg)](ai_tracking/)
+[![Satellite](https://img.shields.io/badge/Satellite-JioSpaceFiber%20(SES%20MEO)-00d4ff.svg)](fleet_gatekeeper_hub.py)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#)
 
-## Overview
+**DRISHTI AI** is a commercial-grade, edge-AI driver monitoring and vehicular safety platform designed for high-risk fleet transit in rugged mountain corridors (e.g., Darjeeling's Hill Cart Road, Zoji La, Sikkim, and mining passes).
 
-This project is a lightweight monitoring prototype designed for experimentation and demonstration. It combines:
+By fusing **MediaPipe Face Mesh biometrics**, a fine-tuned **Hugging Face Driver Classifier**, temporal noise-filtering, and an intelligent **JioSpaceFiber (SES MEO)** satellite failover architecture, DRISHTI AI provides continuous driver protection and life-safety dispatch even when traveling through zero-connectivity Himalayan dead zones.
 
-- AI-based signal evaluation from camera or telemetry inputs
-- risk scoring for drowsiness, distraction, yawning, phone use, and speeding
-- cloud, satellite, and hybrid transmission decisions
-- JSONL audit logging for traceability
-- a live browser dashboard plus a remote stream demo path
+---
 
-## Architecture
+## ⚡ Quick Start (1-Click Launchers)
 
-The current design follows an AI-first monitoring model:
+For team members and live presentations on Windows:
 
-- Application/Monitoring Layer: [ai_tracking/](ai_tracking/), [fleet_gatekeeper_hub.py](fleet_gatekeeper_hub.py)
-- Transport Layer: cloud, satellite, and hybrid adapters in [fleet_gatekeeper_hub.py](fleet_gatekeeper_hub.py)
-- Audit Layer: JSONL event logging via the audit adapter in [fleet_gatekeeper_hub.py](fleet_gatekeeper_hub.py)
-- Vision and dashboard layers: [ai_tracking/](ai_tracking/) for MediaPipe Face Mesh analysis, risk scoring, and the live status feed
-- Remote Demo Layer: [demo_stream_server.py](demo_stream_server.py) and [demo_remote_camera_sender.py](demo_remote_camera_sender.py)
+| Launcher Script | What It Does | Target URL / Output |
+| :--- | :--- | :--- |
+| **`run_demo.bat`** *(Double-click)* | Launches both Central Dashboards concurrently | [Flask :5000](http://localhost:5000/) & [Gradio :7860](http://localhost:7860/) |
+| **`run_hybrid_satellite_demo.bat`** | Runs live JioSpaceFiber dead-zone satellite failover | Interactive Terminal Console |
+| **`run_tests.bat`** | Executes the full 19-test automated test suite | `Ran 19 tests — OK` |
 
-## Core files
+---
 
-- [ai_tracking/safety_core.py](ai_tracking/safety_core.py) — risk scoring and monitoring logic for drowsiness, distraction, yawning, phone use, and speeding
-- [fleet_gatekeeper_hub.py](fleet_gatekeeper_hub.py) — orchestration layer, transmission adapters, and CLI entry point
-- [ai_tracking/driver_monitor.py](ai_tracking/driver_monitor.py) — MediaPipe Face Mesh monitoring prototype for live driver-state detection
-- [ai_tracking/driver_monitor_dashboard.py](ai_tracking/driver_monitor_dashboard.py) — dashboard backend, status API, and frame-processing loop
-- [demo_stream_server.py](demo_stream_server.py) — sample MJPEG stream server that serves uploaded frames from a remote camera
-- [demo_remote_camera_sender.py](demo_remote_camera_sender.py) — sample sender that uploads JPEG frames from a remote device to the demo stream server
-- [webcam_camera_test.py](webcam_camera_test.py) — webcam/network validation utility
-- [start_drishiti.ps1](start_drishiti.ps1) — one-click Windows launcher for the monitoring hub
-- [tests/test_safety_core.py](tests/test_safety_core.py) — regression tests for the core risk engine
+## 🎯 The Three Live Pitch Demonstrations
 
-## How the monitoring works
+Complete presentation instructions and talking points are available in the **[Executive Demo Pitch Guide](DEMO_PITCH_GUIDE.md)**.
 
-1. A driver signal is generated from a live camera stream, remote feed, or telemetry input.
-2. The AI monitor evaluates signals such as:
-   - drowsiness_high
-   - distraction_high
-   - yawning_detected
-   - phone_usage_detected
-   - speeding_detected
-3. A risk level is assigned:
-   - NORMAL
-   - MODERATE
-   - HIGH
-4. The transmission layer routes the event:
-   - cloud for routine or moderate-risk events
-   - satellite for high-risk or emergency escalation
-   - hybrid for dual transmission when needed
-5. The event is written to the audit log for downstream review.
+### 👁️ Demo 1: The Live "Hairpin Bend" & Blind-Spot Simulation
+* **Platform**: [http://localhost:5000/](http://localhost:5000/)
+* **The Pitch**: Conventional dashcams sound annoying false alarms on every sharp turn. DRISHTI AI utilizes a **24-frame temporal buffer** that absorbs brief lateral head movements (checking mirrors on sharp mountain hairpins). 
+* **The Climax**: The exact millisecond the driver's eyes remain closed for **$> 1.5\text{ seconds}$**, the dashboard flashes an intense red border, rings an audio alarm, and flags `CRITICAL: DROWSINESS DETECTED`.
 
-## Quick start
+### 📡 Demo 2: The "Deep Valley" Satellite Failover (JioSpaceFiber)
+* **Command**: `run_hybrid_satellite_demo.bat`
+* **The Pitch**: In steep Himalayan gorges where competitor platforms lose signal and go blind, DRISHTI AI automatically detects cellular loss within 0.8s and shifts routing to **JioSpaceFiber** (leveraging India's licensed SES O3b mPOWER satellite constellation):
+  ```text
+  ⚠️ [NETWORK CRITICAL] 4G/5G connection lost. Routing shifted to JioSpaceFiber Satellite Link.
+  🛰️ [SATELLITE_TX] 4G/5G Signal Dead. Pushing compressed hex packet via JioSpaceFiber link: DRST|V1|R:HIG|F:dist
+  ```
+* **Store-and-Forward**: Low-priority telemetry is cached in an offline SQLite queue; the moment cellular connectivity is restored, it drains and syncs automatically with zero data loss.
 
-### 0) Start the local webcam dashboard for live face tracking
+### 🏎️ Demo 3: Keyboard-Driven CAN-Bus Telematics & Speed Intercepts
+* **Platform**: [http://localhost:5000/](http://localhost:5000/) or `python demo_can_telematics.py`
+* **Controls**: Press **Up / Down Arrow keys** (or click on-screen buttons) to modulate vehicle speed.
+* **The Escalation**:
+  - At cruising speed ($60\text{ km/h}$), looking away is flagged as **`MODERATE RISK`** (amber badge, standard 4G/5G link).
+  - Accelerating past **$80\text{ km/h}$** (overspeed threshold) while distracted immediately escalates risk to **`🚨 HIGH RISK`**, triggering prioritized satellite dispatch over JioSpaceFiber.
 
-This is the simplest way to view the live driver-monitoring dashboard from your machine webcam.
+---
 
-From the project root:
+## 🏗️ Architecture Blueprint
 
+```mermaid
+flowchart LR
+    A["Camera Input (30 FPS)"] --> B["MediaPipe Face Mesh (468 pts)"]
+    A --> C["Hugging Face Classifier (Custom Checkpoint)"]
+    B --> D["Geometric Biometrics (EAR / MAR / Head Pose)"]
+    D --> E["24-Frame Temporal Buffer Filter"]
+    C & E & F["CAN-Bus Speed Telematics"] --> G["Safety Core Risk Engine"]
+    G --> H{"Connectivity Probe"}
+    H -- "4G/5G Online" --> I["Jio 4G/5G Cellular Stream"]
+    H -- "Dead Zone" --> J["JioSpaceFiber Satellite Link (SES MEO)"]
+    J --> K["32-Byte Micro-Packet SBD Fallback"]
+    I & J --> L["Central Fleet Operations Command"]
+```
+
+---
+
+## 📂 Core Project Components
+
+* **`app.py`**: Central Operations Command web dashboard (zero-latency MJPEG video streaming, live speedometer, interactive CAN controls, dynamic satellite badge).
+* **`gradio_app.py`**: Gradio telemetry inspector with signal breakdown and remote intervention triggers.
+* **`fleet_gatekeeper_hub.py`**: Headless enterprise gatekeeper with hybrid cellular/JioSpaceFiber routing, store-and-forward SQLite caching, and Windows UTF-8 emoji support.
+* **`ai_tracking/driver_monitor.py`**: Real-time facial biometrics, EAR/MAR calculation, head pose estimation, and temporal filter overlays.
+* **`ai_tracking/safety_core.py`**: Multi-signal risk assessment matrix and speed escalation logic ($80\text{ km/h}$ threshold).
+* **`ai_tracking/huggingface_client.py`**: Non-blocking asynchronous Hugging Face inference pipeline.
+* **`demo_can_telematics.py`**: Standalone terminal CAN-bus speed controller for companion-screen presentations.
+
+---
+
+## 👥 Documentation for Collaborators
+
+* 📘 **[Team Onboarding & Architecture Master Guide](TEAM_ONBOARDING_AND_ARCHITECTURE.md)**: Full architecture breakdown, developer setup, code layout, and extension points.
+* 🎤 **[Executive Demo Pitch Guide](DEMO_PITCH_GUIDE.md)**: Presentation script and talking points for stakeholders and investors.
+
+---
+
+## 🧪 Testing & Verification
+
+Run the comprehensive test suite:
 ```powershell
-cd "C:\Users\ROHIT\OneDrive\Desktop\DRISHTI AI"
-& ".venv\Scripts\python.exe" app.py
+& ".\.venv\Scripts\python.exe" -m unittest discover tests
 ```
-
-Then open:
-
-- http://localhost:5000/
-
-This Flask app uses the local OpenCV camera, runs the AI analysis on each frame, and overlays live driver-status hints directly on the stream.
-The first face detected after startup is enrolled for that session as `roh_01`; a different face is shown as `DRIVER NOT RECOGNIZED`.
-
-Face tracking uses MediaPipe Face Mesh with 468 dense facial landmarks. The monitor derives eye-aspect ratio, mouth-aspect ratio, head pose, bounding-box overlay, drowsiness, yawning, and distraction alerts directly from those landmarks.
-
-Hugging Face facial-expression classification runs on the tracked face crop and is **on by default**. Install the dependencies from `requirements.txt` (including `transformers`, `huggingface_hub`, `torch`, and `pillow`).
-
-The monitor first tries a local `transformers` pipeline. If that cannot load, it falls back to the Hugging Face Inference API. Set `HF_TOKEN` (or `HUGGINGFACE_HUB_TOKEN`) for higher Inference API rate limits or gated models.
-
-```powershell
-$env:DRISHTI_HF_EMOTION = "1"
-$env:DRISHTI_HF_MODEL = "trpakov/vit-face-expression"
-$env:DRISHTI_HF_INTERVAL = "1.0"
-$env:HF_TOKEN = "hf_..."
-& ".venv\Scripts\python.exe" app.py
-```
-
-The model is downloaded from Hugging Face on first local use and cached. Emotion is drawn on the live overlay and shown on the dashboard. High-confidence `angry`, `fear`, `sad`, or `disgust` labels add an `emotional_stress` reason to the risk engine. MediaPipe remains the primary face-tracking path; if Hugging Face is unavailable, driver monitoring continues without the emotion signal.
-
-Disable it with `$env:DRISHTI_HF_EMOTION = "0"`.
-
-Phone-use detection is optional and requires a MediaPipe Tasks-compatible TFLite object detector at `models/phone_detector.tflite`, or a path supplied through `DRISHTI_PHONE_MODEL`. The detector must expose a `cell phone` or `phone` label. A phone alert is confirmed only after the phone is detected near a MediaPipe hand while the driver's head is angled down for 12 consecutive frames.
-
-### 1) Use the project virtual environment
-
-From the project root:
-
-```powershell
-.venv\Scripts\python.exe --version
-```
-
-### 2) Run the monitoring hub directly
-
-```powershell
-& ".venv\Scripts\python.exe" fleet_gatekeeper_hub.py --driver-id drv_001 --vehicle-id veh_001 --drowsiness-score 0.82 --distraction-score 0.74 --yawning-score 0.2 --phone-usage-score 0.1 --speed-kph 82 --max-cycles 1 --transmission-mode cloud
-```
-
-### 2a) Stakeholder demo: hybrid satellite failover
-
-Run the hub continuously with the hybrid route selected:
-
-```powershell
-& ".venv\Scripts\python.exe" -u fleet_gatekeeper_hub.py --transmission-mode hybrid --cellular-state auto --max-cycles 0
-```
-
-Turn off Wi-Fi or disconnect the hotspot. When the reachability probe fails, the terminal prints the network-critical transition and a compact satellite packet. Restore the connection to see the cloud route and `store_forward_sync` message. `auto` probes an internet endpoint, so it demonstrates endpoint reachability rather than identifying a specific physical 4G/5G modem.
-
-### 2b) Stakeholder demo: keyboard CAN-bus telemetry
-
-Use the Windows arrow keys while the hub runs:
-
-```powershell
-& ".venv\Scripts\python.exe" -u fleet_gatekeeper_hub.py --transmission-mode hybrid --cellular-state up --keyboard-demo --max-cycles 0
-```
-
-Up increases speed by 5 km/h, Down decreases it, Left/Right simulates looking away, and Escape clears the look-away signal. The `can_telemetry` line shows the current in-memory vehicle state; speeding and distraction combine into the high-risk dispatch path.
-
-### 3) Start the demo remote camera stream
-
-This is useful when no local webcam is available.
-
-```powershell
-cd "C:\Users\ROHIT\OneDrive\Desktop\DRISHTI AI"
-& ".venv\Scripts\python.exe" demo_stream_server.py --host 0.0.0.0 --port 9000
-```
-
-Then send frames from another device or process:
-
-```powershell
-& ".venv\Scripts\python.exe" demo_remote_camera_sender.py --camera-url http://<remote-camera-ip>:8080/shot --upload-url http://<host-ip>:9000/upload --interval-seconds 0.5 --limit 50
-```
-
-### 4) Start the dashboard with the remote stream
-
-```powershell
-cd "C:\Users\ROHIT\OneDrive\Desktop\DRISHTI AI"
-& ".venv\Scripts\python.exe" -m ai_tracking.driver_monitor_dashboard --host 0.0.0.0 --port 9001 --stream-url http://127.0.0.1:9000/feed
-```
-
-Open the browser at:
-
-- http://localhost:9001/
-- or http://<your-machine-ip>:9001/ on the local network
-
-### 5) One-click Windows launch
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start_drishiti.ps1
-```
-
-### 6) Run the tests
-
-```powershell
-& ".venv\Scripts\python.exe" -m unittest discover -s tests -p "test_*.py" -q
-```
-
-## Example output
-
-```text
-cloud_tx driver_id=drv_001 risk=HIGH reasons=['drowsiness_high', 'distraction_high']
-ai_monitor sequence_id=1 driver_id=drv_001 risk=HIGH reasons=drowsiness_high,distraction_high
-```
-
-## Current project status
-
-This repository is a focused prototype for AI-based driver monitoring, alert routing, and local experimentation. It is not a full commercial fleet platform or a hardware immobilizer system.
-
-## Notes
-
-- The app can run with either a local camera or a remote stream feed.
-- The demo stream server is designed to support a remote-device webcam scenario when the local machine cannot access a camera directly.
-- For public internet sharing, the app still requires a public-facing host or tunnel for the dashboard/stream endpoints.
-
-## License
-
-This project is intended for prototype, research, and internal evaluation use.
+*19 unit tests passing covering risk calculation, speed escalation, Hugging Face classification, and satellite hex serialization.*

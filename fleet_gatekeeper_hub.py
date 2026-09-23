@@ -2,12 +2,19 @@ import argparse
 import json
 import random
 import sqlite3
+import sys
+import time
 import urllib.error
 import urllib.request
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Protocol
+
+# Ensure Windows consoles render UTF-8 pitch emojis without charmap encoding errors
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from ai_tracking.safety_core import (
     DriverBehaviorAssessment,
@@ -91,25 +98,38 @@ class KeyboardDriverSignalAdapter(FixedDriverSignalAdapter):
             self._keyboard = msvcrt
         except ImportError:
             pass
+        print(
+            "\n[CAN-BUS TELEMATICS INTERCEPTOR ACTIVE]\n"
+            "  * Up/Down Arrow (or W/S): Accelerate / Decelerate (+/- 5 km/h)\n"
+            "  * Left/Right Arrow (or A/D): Simulate looking away (distraction = 0.90)\n"
+            "  * ESC or Space: Look forward at road (distraction = 0.10)\n",
+            flush=True,
+        )
 
     def read(self, now_ms: int) -> DriverBehaviorSignal:
         if self._keyboard is not None:
+            updated = False
             while self._keyboard.kbhit():
                 key = self._keyboard.getwch()
                 if key in {"\x00", "\xe0"}:
                     key = self._keyboard.getwch()
-                if key == "H":
+                if key in {"H", "w", "W"}:
                     self.speed_kph += 5.0
-                elif key == "P":
+                    updated = True
+                elif key in {"P", "s", "S"}:
                     self.speed_kph = max(0.0, self.speed_kph - 5.0)
-                elif key in {"K", "M"}:
-                    self.distraction_score = 0.9
-                elif key == "\x1b":
-                    self.distraction_score = 0.1
-            print(
-                f"can_telemetry speed_kph={self.speed_kph:.0f} distraction_score={self.distraction_score:.2f}",
-                flush=True,
-            )
+                    updated = True
+                elif key in {"K", "M", "a", "A", "d", "D"}:
+                    self.distraction_score = 0.90
+                    updated = True
+                elif key in {"\x1b", " ", "c", "C"}:
+                    self.distraction_score = 0.10
+                    updated = True
+            if updated:
+                print(
+                    f"can_telemetry speed_kph={self.speed_kph:.0f} distraction_score={self.distraction_score:.2f}",
+                    flush=True,
+                )
         return super().read(now_ms)
 
 
@@ -126,11 +146,18 @@ class CloudTransmissionAdapter:
 
 
 class SatelliteTransmissionAdapter:
+    def __init__(self, provider: str = "JioSpaceFiber") -> None:
+        self.provider = provider
+
     def send_alert(self, payload: Dict[str, object]) -> bool:
         risk_level = str(payload.get("risk_level", "NORMAL"))
         reasons = [str(reason) for reason in payload.get("reasons", [])]
-        compact_packet = f"DRST|V1|R:{risk_level[:3]}|F:{reasons[0][:4] if reasons else 'none'}"
-        print(f"[SATELLITE_TX] 4G/5G Signal Dead. Pushing compressed packet via satellite link: {compact_packet}", flush=True)
+        reason_tag = reasons[0][:4] if reasons else "none"
+        compact_packet = f"DRST|V1|R:{risk_level[:3]}|F:{reason_tag}"
+        print(
+            f"🛰️ [SATELLITE_TX] 4G/5G Signal Dead. Pushing compressed hex packet via {self.provider} link: {compact_packet}",
+            flush=True,
+        )
         return True
 
     def flush_pending(self) -> int:
@@ -199,9 +226,10 @@ class HybridTransmissionAdapter:
         if route != self.last_route:
             previous = self.last_route or "startup"
             if route == "satellite":
-                print("[NETWORK CRITICAL] 4G/5G connection lost. Routing shifted to Satellite Link.", flush=True)
+                provider = getattr(self.satellite, "provider", "JioSpaceFiber")
+                print(f"⚠️ [NETWORK CRITICAL] 4G/5G connection lost. Routing shifted to {provider} Satellite Link.", flush=True)
             elif previous == "satellite":
-                print("[NETWORK RESTORED] 4G/5G connection restored. Routing shifted to Cloud Link.", flush=True)
+                print("📶 [NETWORK RESTORED] 4G/5G connection restored. Routing shifted to Cloud Link.", flush=True)
             print(f"hybrid_route from={previous} to={route} reason={reason}", flush=True)
             self.last_route = route
 
@@ -223,7 +251,9 @@ class HybridTransmissionAdapter:
             return self.satellite.send_alert(payload)
 
         self.queue.enqueue(payload)
-        print(f"local_storage_cache risk={risk_level} reasons={reasons}")
+        seq = payload.get("sequence_id", 0)
+        print(f"📦 [STORE & FORWARD] Offline queue cached telemetry payload (Seq: {seq}, Risk: {risk_level})", flush=True)
+        print(f"local_storage_cache risk={risk_level} reasons={reasons}", flush=True)
         return False
 
     def flush_pending(self) -> int:
@@ -236,7 +266,8 @@ class HybridTransmissionAdapter:
         self._report_route("cellular_4g_5g", "cellular_available")
         drained = self.queue.drain()
         if drained:
-            print(f"store_forward_sync count={drained}")
+            print(f"🔄 [STORE & FORWARD] Cellular online: Synced and drained {drained} queued telemetry packets to cloud.", flush=True)
+            print(f"store_forward_sync count={drained}", flush=True)
         return drained
 
 
@@ -320,6 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cycle-seconds", type=float, default=1.0)
     parser.add_argument("--max-cycles", type=int, default=1)
     parser.add_argument("--transmission-mode", choices=["cloud", "satellite", "hybrid"], default="cloud")
+    parser.add_argument("--satellite-provider", default="JioSpaceFiber", help="Satellite network provider (default: JioSpaceFiber)")
     parser.add_argument("--cellular-state", choices=["auto", "up", "down"], default="auto")
     parser.add_argument("--keyboard-demo", action="store_true", help="Read speed/look-away changes from Windows arrow keys")
     parser.add_argument("--queue-db", default="local_audit_cache.db")
@@ -331,6 +363,7 @@ def build_transmission_adapter(
     mode: str,
     queue_db: str = "local_audit_cache.db",
     cellular_state: str = "auto",
+    satellite_provider: str = "JioSpaceFiber",
 ) -> TransmissionPort:
     cellular_available = None
     if cellular_state in {"up", "down"}:
@@ -338,13 +371,14 @@ def build_transmission_adapter(
     else:
         cellular_available = _probe_cellular
 
+    satellite_adapter = SatelliteTransmissionAdapter(provider=satellite_provider)
     if mode == "cloud":
         return CloudTransmissionAdapter()
     if mode == "satellite":
-        return SatelliteTransmissionAdapter()
+        return satellite_adapter
     return HybridTransmissionAdapter(
         cloud=CloudTransmissionAdapter(),
-        satellite=SatelliteTransmissionAdapter(),
+        satellite=satellite_adapter,
         queue=StoreForwardQueue(queue_db),
         cellular_available=cellular_available,
     )
@@ -378,6 +412,7 @@ def main() -> int:
         args.transmission_mode,
         queue_db=args.queue_db,
         cellular_state=args.cellular_state,
+        satellite_provider=args.satellite_provider,
     )
     audit = JsonlAuditLogAdapter(output_path=args.audit_log)
 

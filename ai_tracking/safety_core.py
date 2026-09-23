@@ -87,6 +87,9 @@ class DriverBehaviorSignal:
     speed_kph: float = 0.0
     emotional_stress_score: float = 0.0
     timestamp_ms: int = 0
+    main_ai_model: str = "Hugging Face"
+    hf_state: str = ""
+    hf_confidence: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,7 @@ class DriverBehaviorAssessment:
     reasons: List[str]
     confidence: float
     recommended_transmission: str = "cloud"
+    main_ai_model: str = "Hugging Face"
 
     @property
     def is_high_risk(self) -> bool:
@@ -110,7 +114,7 @@ class DriverBehaviorMonitor:
         distraction_threshold: float = 0.65,
         yawning_threshold: float = 0.6,
         phone_usage_threshold: float = 0.8,
-        speeding_threshold_kph: float = 100.0,
+        speeding_threshold_kph: float = 80.0,
         max_signal_age_ms: int = 5000,
     ) -> None:
         self.drowsiness_threshold = drowsiness_threshold
@@ -126,11 +130,11 @@ class DriverBehaviorMonitor:
 
         if signal.drowsiness_score >= self.drowsiness_threshold:
             reasons.append("drowsiness_high")
-            risk_score += 0.45
+            risk_score += 0.80
 
         if signal.distraction_score >= self.distraction_threshold:
             reasons.append("distraction_high")
-            risk_score += 0.35
+            risk_score += 0.45
 
         if signal.yawning_score >= self.yawning_threshold:
             reasons.append("yawning_detected")
@@ -142,11 +146,16 @@ class DriverBehaviorMonitor:
 
         if signal.speed_kph >= self.speeding_threshold_kph:
             reasons.append("speeding_detected")
-            risk_score += 0.15
+            risk_score += 0.35
 
         if signal.emotional_stress_score >= 0.55:
             reasons.append("emotional_stress")
             risk_score += 0.10
+
+        if signal.hf_state and signal.hf_confidence >= 0.5 and signal.hf_state.upper() != "ALERT_NORMAL":
+            hf_reason = f"hf_{signal.hf_state.lower()}"
+            if hf_reason not in reasons:
+                reasons.append(hf_reason)
 
         if now_ms - signal.timestamp_ms > self.max_signal_age_ms:
             reasons.append("stale_signal")

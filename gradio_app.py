@@ -9,15 +9,27 @@ Provides:
 
 import json
 import os
+import sys
 import urllib.request
 import cv2
 import gradio as gr
 import numpy as np
 
-from ai_tracking.driver_monitor import DrishtiAIDMS
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Initialize DMS engine for standalone test tab
-dms = DrishtiAIDMS()
+# Lazy-loaded DMS engine for standalone test tab to avoid doubling RAM/CPU at startup
+_dms_engine = None
+
+def get_dms():
+    global _dms_engine
+    if _dms_engine is None:
+        from ai_tracking.driver_monitor import DrishtiAIDMS
+        _dms_engine = DrishtiAIDMS()
+    return _dms_engine
+
 flask_port = os.environ.get("DRISHTI_PORT", "5000")
 
 
@@ -30,18 +42,24 @@ def fetch_live_telemetry():
             data = json.loads(resp.read().decode("utf-8"))
 
         status = data.get("status_text", "SYSTEM ACTIVE")
+        model_name = data.get("main_ai_model", "Hugging Face")
+        hf_state = data.get("hf_state") or data.get("emotion") or "N/A"
+        hf_score = float(data.get("hf_score") or data.get("emotion_score") or 0.0)
+        hf_backend = data.get("hf_backend") or "transformers"
+        ai_engine = f"Main AI Engine: {model_name} ({hf_backend.upper()})"
         driver = f"Driver ID: {data.get('driver_id', 'UNKNOWN')}"
         risk = f"Risk Level: {data.get('risk_level', 'NORMAL')} (Score: {data.get('risk_score', 0.0):.2f})"
         biometrics = f"EAR: {data.get('ear', 0.0):.2f} | MAR: {data.get('mar', 0.0):.2f}"
-        emotion = f"AI State: {data.get('emotion', 'N/A')} (Conf: {data.get('emotion_score', 0.0):.2f})"
+        hf_summary = f"HF Driver State: {hf_state} (Confidence: {hf_score:.2f})"
         reasons = f"Active Signals: {', '.join(data.get('reasons', [])) or 'None'}"
 
         summary = (
             f"=== {status} ===\n"
+            f"{ai_engine}\n"
             f"{driver}\n"
             f"{risk}\n"
             f"{biometrics}\n"
-            f"{emotion}\n"
+            f"{hf_summary}\n"
             f"{reasons}"
         )
         return summary, data
@@ -63,7 +81,7 @@ def track_standalone_driver(frame):
 
     bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
     try:
-        alerts = dms.process_frame(bgr_frame)
+        alerts = get_dms().process_frame(bgr_frame)
     except Exception as exc:
         return frame, f"Error processing frame: {exc}", {"error": str(exc)}
 
@@ -84,6 +102,11 @@ def track_standalone_driver(frame):
     elif not alerts.get("face_detected", False):
         status_text = "NO FACE DETECTED"
         color = (0, 180, 255)
+
+    hf = alerts.get("huggingface") or {}
+    hf_label = str(hf.get("label") or hf.get("emotion") or "")
+    if hf_label and hf_label not in {"DISABLED", "UNAVAILABLE", "PENDING", "NO FACE"}:
+        status_text += f" [HF: {hf_label}]"
 
     cv2.putText(bgr_frame, status_text, (25, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
     rgb_output = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)

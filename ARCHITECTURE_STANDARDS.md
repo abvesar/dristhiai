@@ -20,15 +20,20 @@ DRISHTI AI is now structured around AI-first driver behavior monitoring instead 
 
 This initial release keeps the system deliberately simple: AI models detect the risk, and telemetry is sent through cloud or satellite channels depending on severity.
 
-## 2) AI-First Risk Rules
+## 2) Main AI Model: Hugging Face Primary Inference Engine
 
-Implemented in `DriverBehaviorMonitor`:
-- High drowsiness score triggers a drowsiness alert.
-- High distraction score triggers a distraction alert.
-- Yawning, phone use, and speeding increase the risk score.
-- High risk routes the alert through satellite transmission.
-- Moderate risk uses cloud transmission.
-- Normal behavior remains low-alert and cloud-transmitted only if needed.
+DRISHTI AI designates **Hugging Face** (`transformers` / Hugging Face Hub) as its central AI classification engine:
+
+- **Primary Classification Model**:
+  - `models/drishti_driver_classifier`: Fine-tuned transformer vision model (MobileNetV2 image classifier) loaded via Hugging Face `transformers.pipeline`.
+  - Directly predicts driver states: `alert_normal`, `drowsy`, `distracted`, `yawning`, `phone_use`.
+  - Configurable fallback to Hugging Face Hub / Inference API (`DRISHTI_HF_MODEL`).
+- **MediaPipe Preprocessing & Biometric Cross-Validation**:
+  - MediaPipe Face Mesh handles real-time face detection, alignment, and bounding box cropping to feed the Hugging Face vision model.
+  - MediaPipe landmark geometry (EAR, MAR, Head Pose Yaw) acts as a high-frequency cross-validation layer to smooth and verify Hugging Face classifications.
+- **AI Decision & Risk Routing**:
+  - Hugging Face state predictions drive driver state flags (`drowsy`, `distracted`, `yawning`, `phone_usage`).
+  - High-confidence risk classifications escalate alerts through satellite transmission, while routine normal driving routes via cloud telemetry.
 
 ## 3) Output Contract
 

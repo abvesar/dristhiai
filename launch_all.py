@@ -66,14 +66,31 @@ def main():
     threading.Thread(target=stream_logs, args=(flask_proc.stdout, "[FLASK] "), daemon=True).start()
     threading.Thread(target=stream_logs, args=(gradio_proc.stdout, "[GRADIO]"), daemon=True).start()
 
-    # Automatically open both browser tabs with appropriate spacing
+    # Automatically verify server health and open browser tabs once listening
     def open_browsers():
-        time.sleep(3.0)
-        print(f"\n[LAUNCHER] Opening Flask dashboard (http://localhost:{flask_port}/)...")
-        webbrowser.open(f"http://localhost:{flask_port}/")
-        time.sleep(6.0)
-        print(f"[LAUNCHER] Opening Gradio dashboard (http://localhost:{gradio_port}/)...")
-        webbrowser.open(f"http://localhost:{gradio_port}/")
+        import urllib.request
+
+        def wait_and_open(url: str, label: str, max_wait: float = 30.0):
+            start = time.time()
+            opened = False
+            while time.time() - start < max_wait:
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "DrishtiLauncher"})
+                    with urllib.request.urlopen(req, timeout=0.8) as resp:
+                        if resp.status in (200, 302):
+                            print(f"\n[LAUNCHER] {label} is ready! Launching browser at {url}...", flush=True)
+                            webbrowser.open(url)
+                            opened = True
+                            break
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            if not opened:
+                print(f"\n[LAUNCHER] Timeout waiting for {label}; opening {url} anyway...", flush=True)
+                webbrowser.open(url)
+
+        wait_and_open(f"http://localhost:{flask_port}/", "Flask Operations Dashboard", max_wait=15.0)
+        wait_and_open(f"http://localhost:{gradio_port}/", "Gradio Live AI Telemetry UI", max_wait=30.0)
 
     threading.Thread(target=open_browsers, daemon=True).start()
 

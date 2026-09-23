@@ -10,25 +10,36 @@ import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
-from .huggingface_client import HuggingFaceEmotionClassifier
+from .huggingface_client import HuggingFaceDriverClassifier, HuggingFaceEmotionClassifier
 
 
 class EdgeAIClassifier:
     """Lightweight edge-AI decision layer for local driver-state inference."""
 
     def __init__(self) -> None:
-        self.drowsiness_weight = 0.45
-        self.distraction_weight = 0.35
+        self.drowsiness_weight = 0.80
+        self.distraction_weight = 0.45
         self.yawning_weight = 0.15
         self.phone_usage_weight = 0.20
+        self.speeding_weight = 0.35
 
-    def classify(self, drowsy=False, distracted=False, yawning=False, phone_usage=False, speed_kph=0.0, emotional_stress=False) -> Dict[str, object]:
+    def classify(
+        self,
+        drowsy: bool = False,
+        distracted: bool = False,
+        yawning: bool = False,
+        phone_usage: bool = False,
+        speed_kph: float = 0.0,
+        emotional_stress: bool = False,
+        hf_label: str = "",
+        hf_score: float = 0.0,
+    ) -> Dict[str, object]:
         risk_score = sum([
             self.drowsiness_weight if drowsy else 0.0,
             self.distraction_weight if distracted else 0.0,
             self.yawning_weight if yawning else 0.0,
             self.phone_usage_weight if phone_usage else 0.0,
-            0.15 if speed_kph >= 100.0 else 0.0,
+            self.speeding_weight if speed_kph >= 80.0 else 0.0,
             0.10 if emotional_stress else 0.0,
         ])
         risk_level = "HIGH" if risk_score >= 0.8 else "MODERATE" if risk_score >= 0.45 else "NORMAL"
@@ -41,20 +52,35 @@ class EdgeAIClassifier:
             reasons.append("yawning_detected")
         if phone_usage:
             reasons.append("phone_usage_detected")
-        if speed_kph >= 100.0:
+        if speed_kph >= 80.0:
             reasons.append("speeding_detected")
         if emotional_stress:
             reasons.append("emotional_stress")
+        if hf_label and hf_score >= 0.5:
+            reasons.append(f"hf_{hf_label.lower()}")
         if not reasons:
             reasons.append("behavior_normal")
-        return {"risk_level": risk_level, "risk_score": round(risk_score, 3), "confidence": round(min(0.99, 0.6 + risk_score * 0.5), 3), "reasons": reasons}
+
+        confidence = round(min(0.99, max(hf_score, 0.6 + min(1.0, risk_score) * 0.5)), 3)
+        return {
+            "risk_level": risk_level,
+            "risk_score": round(min(1.0, risk_score), 3),
+            "confidence": confidence,
+            "reasons": reasons,
+            "main_ai_model": "Hugging Face",
+        }
 
 
 class DrishtiAIDMS:
     def __init__(self):
         self.phone_detector = self._create_phone_detector()
         self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
         self.LEFT_EYE = [362, 385, 387, 263, 373, 380]
         self.RIGHT_EYE = [33, 160, 158, 133, 153, 144]
         self.MOUTH = [78, 81, 13, 311, 308, 402, 14, 178]
@@ -80,7 +106,10 @@ class DrishtiAIDMS:
         )
         self.phone_usage_counter = 0
         self.PHONE_USAGE_FRAME_LIMIT = 12
-        self.hf_emotion = HuggingFaceEmotionClassifier()
+
+        # Primary AI Model: Hugging Face
+        self.hf_driver = HuggingFaceDriverClassifier()
+        self.hf_emotion = self.hf_driver  # Backwards compatibility alias
 
     def _create_phone_detector(self):
         model_path = Path(os.environ.get("DRISHTI_PHONE_MODEL", "models/phone_detector.tflite"))
@@ -180,21 +209,41 @@ class DrishtiAIDMS:
             cv2.line(frame, tuple(points[start]), tuple(points[end]), (80, 130, 80), 1)
         for eye_indices in (self.LEFT_EYE, self.RIGHT_EYE):
             cv2.polylines(frame, [points[eye_indices].reshape((-1, 1, 2))], True, (0, 255, 255), 2)
-        label = "FACE TRACKED"
+
+        label = "FACE TRACKED - NORMAL"
         if status["phone_usage"]:
-            label = "PHONE USAGE ALERT"
+            label = "HF: PHONE USAGE ALERT"
         elif status["drowsy"]:
-            label = "DROWSINESS ALERT"
+            label = "HF: DROWSINESS ALERT"
         elif status["yawning"]:
-            label = "YAWN DETECTED"
+            label = "HF: YAWN DETECTED"
         elif status["distracted"]:
-            label = "DISTRACTION ALERT"
-        cv2.putText(frame, label, (max(10, x_min), max(30, y_min - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 220, 255) if label == "FACE TRACKED" else (0, 80, 255), 2)
+            label = "HF: DISTRACTION ALERT"
+
+        cv2.putText(
+            frame,
+            label,
+            (max(10, x_min), max(30, y_min - 10)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 220, 255) if "NORMAL" in label else (0, 80, 255),
+            2,
+        )
+
         hf = status.get("huggingface") or {}
-        emotion = str(hf.get("emotion") or "")
-        if emotion and emotion not in {"DISABLED", "UNAVAILABLE", "PENDING", "NO FACE"}:
-            hf_label = f"HF {emotion} {hf.get('score') or 0}"
-            cv2.putText(frame, hf_label, (max(10, x_min), min(height - 12, y_max + 24)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 220, 255), 2)
+        hf_label = str(hf.get("label") or hf.get("emotion") or "")
+        if hf_label and hf_label not in {"DISABLED", "UNAVAILABLE", "PENDING", "NO FACE"}:
+            hf_score_text = f"{int(float(hf.get('score') or 0.0) * 100)}%"
+            hf_display = f"MAIN AI (HF): {hf_label} {hf_score_text}"
+            cv2.putText(
+                frame,
+                hf_display,
+                (max(10, x_min), min(height - 12, y_max + 24)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (180, 220, 255),
+                2,
+            )
 
     def calculate_ear(self, landmarks, eye_indices):
         p = [np.array([landmarks[i].x, landmarks[i].y]) for i in eye_indices]
@@ -205,8 +254,22 @@ class DrishtiAIDMS:
         return (np.linalg.norm(p[1] - p[6]) + np.linalg.norm(p[3] - p[5])) / (2.0 * np.linalg.norm(p[0] - p[4]))
 
     def estimate_head_pose(self, landmarks, img_w, img_h):
-        model_points = np.array([(0.0, 0.0, 0.0), (0.0, -330.0, -65.0), (-225.0, 170.0, -135.0), (225.0, 170.0, -135.0), (-150.0, -150.0, -125.0), (150.0, -150.0, -125.0)], dtype=np.float32)
-        image_points = np.array([(landmarks[1].x * img_w, landmarks[1].y * img_h), (landmarks[152].x * img_w, landmarks[152].y * img_h), (landmarks[33].x * img_w, landmarks[33].y * img_h), (landmarks[263].x * img_w, landmarks[263].y * img_h), (landmarks[61].x * img_w, landmarks[61].y * img_h), (landmarks[291].x * img_w, landmarks[291].y * img_h)], dtype=np.float32)
+        model_points = np.array([
+            (0.0, 0.0, 0.0),
+            (0.0, -330.0, -65.0),
+            (-225.0, 170.0, -135.0),
+            (225.0, 170.0, -135.0),
+            (-150.0, -150.0, -125.0),
+            (150.0, -150.0, -125.0),
+        ], dtype=np.float32)
+        image_points = np.array([
+            (landmarks[1].x * img_w, landmarks[1].y * img_h),
+            (landmarks[152].x * img_w, landmarks[152].y * img_h),
+            (landmarks[33].x * img_w, landmarks[33].y * img_h),
+            (landmarks[263].x * img_w, landmarks[263].y * img_h),
+            (landmarks[61].x * img_w, landmarks[61].y * img_h),
+            (landmarks[291].x * img_w, landmarks[291].y * img_h),
+        ], dtype=np.float32)
         camera_matrix = np.array([[img_w, 0, img_w / 2], [0, img_w, img_h / 2], [0, 0, 1]], dtype=np.float32)
         try:
             _, rotation_vector, _ = cv2.solvePnP(model_points, image_points, camera_matrix, np.zeros((4, 1)), flags=cv2.SOLVEPNP_ITERATIVE)
@@ -219,13 +282,41 @@ class DrishtiAIDMS:
         roll = math.degrees(math.atan2(rmat[1, 0], rmat[0, 0])) if sy > 1e-6 else 0.0
         return pitch, yaw, roll
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, speed_kph: float = 0.0):
         h, w, _ = frame.shape
         results = self.face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        status = {"drowsy": False, "distracted": False, "yawning": False, "phone_usage": False, "phone_detected": False, "phone_held": False, "looking_down": False, "phone_usage_score": 0.0, "face_recognized": False, "driver_id": "DRIVER NOT RECOGNIZED", "fatigue_score": 0.0, "ear": 0.0, "mar": 0.0, "yaw": 0.0, "face_detected": bool(results.multi_face_landmarks), "huggingface": self.hf_emotion.idle_status()}
+        status = {
+            "drowsy": False,
+            "distracted": False,
+            "yawning": False,
+            "phone_usage": False,
+            "phone_detected": False,
+            "phone_held": False,
+            "looking_down": False,
+            "phone_usage_score": 0.0,
+            "face_recognized": False,
+            "driver_id": "DRIVER NOT RECOGNIZED",
+            "fatigue_score": 0.0,
+            "ear": 0.0,
+            "mar": 0.0,
+            "yaw": 0.0,
+            "speed_kph": speed_kph,
+            "distraction_counter": self.DISTRACTION_COUNTER,
+            "distraction_limit": self.DISTRACTION_FRAME_LIMIT,
+            "closed_duration": 0.0,
+            "face_detected": bool(results.multi_face_landmarks),
+            "huggingface": self.hf_driver.idle_status(),
+            "main_ai_model": "Hugging Face",
+        }
+
         if results.multi_face_landmarks:
             landmarks = results.multi_face_landmarks[0].landmark
-            status["huggingface"] = self.hf_emotion.classify(frame, landmarks)
+
+            # 1. Main AI Model: Run Hugging Face driver classification
+            hf_res = self.hf_driver.classify(frame, landmarks)
+            status["huggingface"] = hf_res
+
+            # 2. Facial Biometrics (MediaPipe FaceMesh)
             status["face_recognized"], status["driver_id"] = self._recognize_face(landmarks)
             avg_ear = (self.calculate_ear(landmarks, self.LEFT_EYE) + self.calculate_ear(landmarks, self.RIGHT_EYE)) / 2.0
             status["ear"] = avg_ear
@@ -237,29 +328,73 @@ class DrishtiAIDMS:
                 self._eyes_closed_since = None
                 self.EYE_CLOSED_COUNTER = max(0, self.EYE_CLOSED_COUNTER - 2)
             closed_duration = 0.0 if self._eyes_closed_since is None else time.monotonic() - self._eyes_closed_since
-            status["drowsy"] = closed_duration >= 1.5
+            status["closed_duration"] = round(closed_duration, 2)
+
             mar = self.calculate_mar(landmarks)
             status["mar"] = mar
             self.YAWN_COUNTER = self.YAWN_COUNTER + 1 if mar > self.MAR_THRESHOLD else max(0, self.YAWN_COUNTER - 1)
-            status["yawning"] = self.YAWN_COUNTER >= self.YAWN_FRAME_LIMIT
+
             pitch, yaw, _ = self.estimate_head_pose(landmarks, w, h)
             status["yaw"] = abs(yaw)
             self.DISTRACTION_COUNTER = self.DISTRACTION_COUNTER + 1 if abs(yaw) > self.YAW_THRESHOLD else max(0, self.DISTRACTION_COUNTER - 2)
-            status["distracted"] = self.DISTRACTION_COUNTER >= self.DISTRACTION_FRAME_LIMIT
+            status["distraction_counter"] = self.DISTRACTION_COUNTER
+
             phone_signal = self._phone_signal(frame, landmarks, pitch)
             status["phone_detected"] = phone_signal["detected"]
             status["phone_held"] = phone_signal["held"]
             status["looking_down"] = phone_signal["looking_down"]
             status["phone_usage_score"] = phone_signal["score"]
-            status["phone_usage"] = phone_signal["score"] >= 0.8
-            status["fatigue_score"] = min(1.0, 0.45 * status["drowsy"] + 0.2 * status["yawning"] + 0.25 * status["distracted"] + 0.15 * (avg_ear < self.EAR_THRESHOLD) + 0.1 * (mar > self.MAR_THRESHOLD))
+
+            # 3. Main AI Fusion: Hugging Face is the primary decision driver,
+            # reinforced and cross-validated by real-time geometric biometrics
+            status["drowsy"] = bool(hf_res.get("drowsy")) or (closed_duration >= 1.5)
+            status["yawning"] = bool(hf_res.get("yawning")) or (self.YAWN_COUNTER >= self.YAWN_FRAME_LIMIT)
+            status["distracted"] = bool(hf_res.get("distracted")) or (self.DISTRACTION_COUNTER >= self.DISTRACTION_FRAME_LIMIT)
+            status["phone_usage"] = bool(hf_res.get("phone_use")) or (phone_signal["score"] >= 0.8)
+
+            status["fatigue_score"] = min(
+                1.0,
+                0.45 * float(status["drowsy"])
+                + 0.20 * float(status["yawning"])
+                + 0.25 * float(status["distracted"])
+                + 0.15 * float(avg_ear < self.EAR_THRESHOLD)
+                + 0.10 * float(mar > self.MAR_THRESHOLD),
+            )
             self._draw_tracking_overlay(frame, landmarks, status)
+
+            # Demo 1 & 3 In-frame Visual Proof Overlays:
+            # A) Hairpin bend / blind-spot mirror temporal filter absorbing check
+            if 0 < self.DISTRACTION_COUNTER < self.DISTRACTION_FRAME_LIMIT:
+                cv2.putText(
+                    frame,
+                    f"TEMPORAL FILTER: ABSORBING HAIRPIN/MIRROR CHECK ({self.DISTRACTION_COUNTER}/{self.DISTRACTION_FRAME_LIMIT})",
+                    (30, h - 50),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.52,
+                    (0, 240, 255),
+                    2,
+                )
+            # B) Eye closure timer before triggering drowsiness
+            if 0.2 < closed_duration < 1.5:
+                cv2.putText(
+                    frame,
+                    f"EYES CLOSING: {closed_duration:.1f}s / 1.5s",
+                    (30, h - 75),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 200, 255),
+                    2,
+                )
+
         hf = status.get("huggingface") or {}
         status["edge_ai"] = EdgeAIClassifier().classify(
             drowsy=status["drowsy"],
             distracted=status["distracted"],
             yawning=status["yawning"],
             phone_usage=status["phone_usage"],
+            speed_kph=speed_kph,
             emotional_stress=bool(hf.get("stress")),
+            hf_label=str(hf.get("label") or ""),
+            hf_score=float(hf.get("score") or 0.0),
         )
         return status

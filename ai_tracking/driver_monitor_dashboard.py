@@ -171,7 +171,7 @@ class DriverAIController:
             yawning_score = 0.82
 
         return DriverBehaviorSignal(
-            driver_id="drv_demo",
+            driver_id=self.driver_id if self.face_recognized else "drv_demo",
             vehicle_id="veh_demo",
             drowsiness_score=drowsiness_score,
             distraction_score=distraction_score,
@@ -180,6 +180,9 @@ class DriverAIController:
             speed_kph=speed_kph,
             emotional_stress_score=emotional_stress_score,
             timestamp_ms=int(time.time() * 1000),
+            main_ai_model="Hugging Face",
+            hf_state=str(hf.get("label") or ""),
+            hf_confidence=float(hf.get("score") or 0.0),
         )
 
     def _update_status_from_scores(self) -> None:
@@ -192,6 +195,9 @@ class DriverAIController:
             phone_usage_score=self.phone_usage_score,
             speed_kph=self.speed_kph,
             timestamp_ms=int(time.time() * 1000),
+            main_ai_model="Hugging Face",
+            hf_state=str(self._huggingface_status.get("label") or ""),
+            hf_confidence=float(self._huggingface_status.get("score") or 0.0),
         )
         assessment = self.monitor.evaluate(signal=signal, now_ms=int(time.time() * 1000))
         self.last_status = {
@@ -201,6 +207,7 @@ class DriverAIController:
             "recommended_transmission": assessment.recommended_transmission,
             "face_recognized": False,
             "driver_id": "DRIVER NOT RECOGNIZED",
+            "main_ai_model": "Hugging Face",
             "huggingface": self._huggingface_status,
         }
 
@@ -214,6 +221,7 @@ class DriverAIController:
             "recommended_transmission": assessment.recommended_transmission,
             "face_recognized": self.face_recognized,
             "driver_id": self.driver_id,
+            "main_ai_model": "Hugging Face",
             "huggingface": self._huggingface_status,
         }
 
@@ -447,7 +455,7 @@ class DriverDashboardHandler(BaseHTTPRequestHandler):
                         <div class="meta-pill">Face status: <strong id="faceStatus">Checking</strong></div>
                         <div class="meta-pill">Vehicle ID: <strong id="vehicleId">veh_demo</strong></div>
                         <div class="meta-pill">Live time: <strong id="clock">--:--:--</strong></div>
-                        <div class="meta-pill">HF emotion: <strong id="hfEmotion">--</strong></div>
+                        <div class="meta-pill">Main AI (HF): <strong id="hfEmotion">--</strong></div>
                     </div>
                 </div>
 
@@ -457,13 +465,14 @@ class DriverDashboardHandler(BaseHTTPRequestHandler):
                     </div>
 
                     <div class="panel">
-                        <div class="small">AI Decision</div>
+                        <div class="small">AI Decision Engine</div>
                         <div class="metrics">
+                            <div class="metric"><span>Main AI Model</span><strong id="mainAiModel">HUGGING FACE</strong></div>
+                            <div class="metric"><span>HF State</span><strong id="hfEmotionMetric">--</strong></div>
                             <div class="metric"><span>Risk Level</span><strong id="riskLevel">--</strong></div>
                             <div class="metric"><span>Confidence</span><strong id="confidence">--</strong></div>
-                            <div class="metric"><span>Transmission</span><strong id="transmission">--</strong></div>
-                            <div class="metric"><span>HF Emotion</span><strong id="hfEmotionMetric">--</strong></div>
                             <div class="metric"><span>HF Backend</span><strong id="hfBackend">--</strong></div>
+                            <div class="metric"><span>Transmission</span><strong id="transmission">--</strong></div>
                         </div>
                         <div class="status-window">
                             <div class="small">Reasons</div>
@@ -494,11 +503,15 @@ class DriverDashboardHandler(BaseHTTPRequestHandler):
                         document.getElementById('transmission').textContent = (data.recommended_transmission || 'cloud').toUpperCase();
 
                         const hf = data.huggingface || {};
-                        const hfLabel = hf.emotion || 'OFF';
-                        const hfScore = hf.score ? ' ' + hf.score : '';
+                        const hfLabel = hf.label || hf.emotion || 'OFF';
+                        const hfScore = hf.score ? ' (' + Math.round(hf.score * 100) + '%)' : '';
                         document.getElementById('hfEmotion').textContent = hfLabel + hfScore;
                         document.getElementById('hfEmotionMetric').textContent = hfLabel + hfScore;
                         document.getElementById('hfBackend').textContent = (hf.backend || 'off').toUpperCase();
+                        const mainAiEl = document.getElementById('mainAiModel');
+                        if (mainAiEl) {
+                            mainAiEl.textContent = (data.main_ai_model || 'HUGGING FACE').toUpperCase();
+                        }
 
                         const reasons = document.getElementById('reasons');
                         reasons.innerHTML = '';
