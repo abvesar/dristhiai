@@ -52,8 +52,6 @@ class NumberedCanvas(canvas.Canvas):
     def draw_page_decorations(self, page_count: int):
         self.saveState()
         self.setFont("Times-Roman", 8)
-        self.setFillColor(colors.HexColor("#444444"))
-
         # Running header (on pages > 1)
         if self._pageNumber > 1:
             self.drawString(
@@ -64,18 +62,6 @@ class NumberedCanvas(canvas.Canvas):
             self.setStrokeColor(colors.HexColor("#CCCCCC"))
             self.setLineWidth(0.5)
             self.line(54, 744, 558, 744)
-
-        # Running footer
-        page_str = f"Page {self._pageNumber} of {page_count}"
-        self.drawRightString(558, 36, page_str)
-        self.drawString(
-            54,
-            36,
-            "Confidential - Submitted for Peer Review in IEEE Transactions on Intelligent Transportation Systems",
-        )
-        self.setStrokeColor(colors.HexColor("#CCCCCC"))
-        self.setLineWidth(0.5)
-        self.line(54, 46, 558, 46)
 
         self.restoreState()
 
@@ -274,9 +260,8 @@ def build_research_paper(output_path: Path) -> Path:
     story.append(Paragraph(title_text, title_style))
 
     authors_text = """
-    <b>Rohit Verma</b><sup>1</sup>, <b>DRISHTI AI Research & Development Team</b><sup>2</sup><br/>
-    Department of Intelligent Transportation Systems & Autonomous Perception<br/>
-    <i>{rohit.verma, research}@drishti-ai.org</i>
+    <b>Rohit Rajesh</b><br/>
+    <i>rohitrajesh54@gmail.com</i>
     """
     story.append(Paragraph(authors_text, author_style))
     story.append(HRFlowable(width="100%", thickness=0.75, color=colors.HexColor("#333333"), spaceAfter=8))
@@ -451,7 +436,7 @@ def build_research_paper(output_path: Path) -> Path:
         "[5] C. Lugaresi et al., 'MediaPipe: A framework for building perception pipelines,' arXiv preprint arXiv:1906.08172, 2019.",
         "[6] A. Vaswani et al., 'Attention is all you need,' in Proc. Adv. Neural Inf. Process. Syst. (NeurIPS), vol. 30, 2017.",
         "[7] F. Visin et al., 'Facial landmark detection and head pose estimation under challenging vehicle in-cabin conditions,' IEEE Trans. Intell. Transp. Syst., vol. 22, no. 8, pp. 5241-5253, 2021.",
-        "[8] R. Verma, 'DRISHTI AI: Software Architecture and Open Telematics Standard (v1.1),' DRISHTI AI Technical Report, Sept. 2026.",
+        "[8] R. Rajesh, 'DRISHTI AI: Software Architecture and Open Telematics Standard (v1.1),' DRISHTI AI Technical Report, Sept. 2026.",
     ]
     for ref in refs:
         story.append(Paragraph(ref, ref_style))
