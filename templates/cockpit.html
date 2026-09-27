@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DRISHTI AI — Commercial Vehicle Cockpit & ADAS Cluster</title>
+    <style>
+        :root {
+            --bg-color: #080a0f;
+            --panel-bg: #10141e;
+            --panel-border: #1e2638;
+            --accent-green: #00ff88;
+            --accent-cyan: #00e5ff;
+            --accent-amber: #ffb300;
+            --accent-red: #ff2a44;
+            --text-main: #f0f4fc;
+            --text-dim: #7d8ea6;
+            --gauge-bg: #161b26;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-image: 
+                radial-gradient(ellipse at 50% -20%, rgba(0, 229, 255, 0.12), transparent 70%),
+                radial-gradient(circle at 10% 90%, rgba(0, 255, 136, 0.04), transparent 50%);
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            background: rgba(16, 20, 30, 0.95);
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px);
+        }
+
+        .truck-identity {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .brand-badge {
+            background: linear-gradient(135deg, #00ff88, #00e5ff);
+            color: #080a0f;
+            font-weight: 900;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            letter-spacing: 1.5px;
+        }
+
+        .vehicle-title {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .vehicle-subtitle {
+            font-size: 12px;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+
+        .network-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-pill {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .pill-cellular {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--accent-green);
+            border-color: rgba(0, 255, 136, 0.3);
+        }
+
+        .pill-satellite {
+            background: rgba(0, 229, 255, 0.15);
+            color: var(--accent-cyan);
+            border-color: rgba(0, 229, 255, 0.4);
+            box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+            animation: satPulse 1.8s infinite;
+        }
+
+        @keyframes satPulse {
+            0%, 100% { opacity: 0.9; }
+            50% { opacity: 1; box-shadow: 0 0 18px rgba(0, 229, 255, 0.6); }
+        }
+
+        /* Remote QR Box */
+        .qr-card-trigger {
+            background: rgba(0, 229, 255, 0.1);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            border-radius: 8px;
+            padding: 5px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .qr-card-trigger:hover {
+            background: rgba(0, 229, 255, 0.2);
+            border-color: var(--accent-cyan);
+        }
+
+        .qr-card-trigger span {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        /* Audio Alert Banner */
+        #alert-banner {
+            display: none;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: 800;
+            text-align: center;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            animation: alertFlash 0.7s infinite;
+        }
+
+        .banner-critical {
+            background: linear-gradient(90deg, #ff2a44, #b30018);
+            color: #ffffff;
+        }
+
+        .banner-directive {
+            background: linear-gradient(90deg, #ffb300, #d48800);
+            color: #080a0f;
+        }
+
+        @keyframes alertFlash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Cockpit Main Grid */
+        .cockpit-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+            gap: 20px;
+            padding: 20px 24px;
+            flex: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .panel-header {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 8px;
+        }
+
+        /* Center Speedometer & ADAS Cluster */
+        .center-cluster {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 10px;
+        }
+
+        .speedo-dial-wrap {
+            position: relative;
+            width: 290px;
+            height: 290px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .speedo-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .speedo-track {
+            fill: none;
+            stroke: #161c28;
+            stroke-width: 16;
+            stroke-dasharray: 628;
+            stroke-dashoffset: 125;
+            stroke-linecap: round;
+        }
+
+        .speedo-fill {
+            fill: none;
+            stroke: var(--accent-green);
+            stroke-width: 16;
+            stroke-dasharray: 628;
+            stroke-dashoffset: 628;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.25s ease, stroke 0.3s ease;
+        }
+
+        .speedo-content {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .speed-number {
+            font-size: 84px;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: -2px;
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+            color: #ffffff;
+            text-shadow: 0 0 25px rgba(0, 255, 136, 0.3);
+            transition: color 0.3s ease;
+        }
+
+        .speed-unit {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            margin-top: -2px;
+        }
+
+        .gear-pill {
+            margin-top: 10px;
+            padding: 3px 12px;
+            background: #182030;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            letter-spacing: 1px;
+            border: 1px solid rgba(0, 229, 255, 0.2);
+        }
+
+        .overspeed-tag {
+            display: none;
+            margin-top: 6px;
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--accent-red);
+            letter-spacing: 1px;
+            animation: alertFlash 0.6s infinite;
+        }
+
+        /* Pneumatic Air Brake Gauges */
+        .pneumatic-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            width: 100%;
+            margin-top: 16px;
+        }
+
+        .air-gauge-card {
+            background: #141924;
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .air-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .air-val {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--accent-green);
+            margin: 4px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .air-bar-track {
+            width: 100%;
+            height: 6px;
+            background: #202738;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .air-bar-fill {
+            height: 100%;
+            width: 98%;
+            background: var(--accent-green);
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        /* Commercial ADAS Badges */
+        .adas-bar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .adas-badge {
+            background: #151a26;
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: var(--text-dim);
+        }
+
+        .adas-badge.active {
+            color: var(--accent-green);
+            border-color: rgba(0, 255, 136, 0.4);
+            background: rgba(0, 255, 136, 0.08);
+        }
+
+        /* Left Panel: Heavy Diesel Tachometer & Telemetry */
+        .tach-wrap {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tach-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .tach-content {
+            position: absolute;
+            text-align: center;
+        }
+
+        .tach-number {
+            font-size: 40px;
+            font-weight: 900;
+            color: #ffffff;
+            line-height: 1;
+        }
+
+        .tach-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #141924;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .stat-row .stat-label {
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+
+        .stat-row .stat-val {
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        /* Right Panel: Driver Monitoring Feed (PiP) */
+        .video-box {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid var(--panel-border);
+        }
+
+        .video-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .dms-live-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--accent-green);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            backdrop-filter: blur(4px);
+        }
+
+        .dms-live-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: dotBlink 1s infinite;
+        }
+
+        @keyframes dotBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .meter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .meter-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .meter-track {
+            height: 7px;
+            background: #1c2230;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-green);
+            transition: width 0.15s ease, background 0.3s ease;
+        }
+
+        /* Drive-by-Wire Bottom Control Bar */
+        .controls-bar {
+            background: rgba(16, 20, 30, 0.98);
+            border-top: 1px solid var(--panel-border);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .key-hints {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .key-badge {
+            background: #1e2638;
+            border: 1px solid #2e3b52;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .hint-text {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .cockpit-btn {
+            background: #182030;
+            color: var(--text-main);
+            border: 1px solid var(--panel-border);
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .cockpit-btn:hover {
+            background: #222b40;
+            border-color: var(--accent-cyan);
+            color: #ffffff;
+        }
+
+        .btn-brake {
+            border-color: rgba(255, 42, 68, 0.3);
+            color: #ff6b7e;
+        }
+
+        .btn-brake:hover {
+            background: rgba(255, 42, 68, 0.2);
+            border-color: var(--accent-red);
+            color: #ffffff;
+        }
+
+        /* Modal for QR Code */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-card {
+            background: #121722;
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 28px;
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .modal-qr-frame {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            display: inline-block;
+        }
+
+        .modal-qr-frame img {
+            width: 180px;
+            height: 180px;
+            display: block;
+        }
+
+        .url-box {
+            background: #0a0d14;
+            border: 1px solid var(--panel-border);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--accent-cyan);
+            width: 100%;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Status Bar -->
+    <header class="top-bar">
+        <div class="truck-identity">
+            <span class="brand-badge">DRISHTI DMS</span>
+            <div>
+                <div class="vehicle-title">TRUCK-IN-4412 <span style="font-size: 13px; color: var(--accent-green); font-weight: 500;">(BharatBenz 5528.T Commercial Hauler)</span></div>
+                <div class="vehicle-subtitle">MASTER OPERATOR: <strong>ROHIT RAJESH</strong> | CORRIDOR: NH-48 FREIGHT EXPRESSWAY</div>
+            </div>
+        </div>
+
+        <div class="network-status">
+            <div id="uplink-pill" class="status-pill pill-cellular">
+                <span>📶 Jio 4G/5G Cellular Link</span>
+            </div>
+
+            <div id="dispatcher-pill" class="status-pill" style="background: rgba(0, 229, 255, 0.1); color: var(--accent-cyan); border-color: rgba(0, 229, 255, 0.3);">
+                <span>📱 Fleet Dispatcher Link</span>
+            </div>
+
+            <div class="qr-card-trigger" onclick="openQrModal()">
+                <span>📱 SCAN FOR CONTROL ROOM</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Emergency / Directive Banner -->
+    <div id="alert-banner"></div>
+
+    <!-- Cockpit Main Display -->
+    <main class="cockpit-container">
+
+        <!-- Left: Heavy Diesel Tachometer & Commercial Engine Metrics -->
+        <section class="panel">
+            <div class="panel-header">
+                <span>CAN-BUS ENGINE TELEMETRY</span>
+                <span style="color: var(--accent-cyan);">OM 926 DIESEL</span>
+            </div>
+
+            <div class="tach-wrap">
+                <svg class="tach-svg" viewBox="0 0 200 200">
+                    <circle cx="100" cy="100" r="80" stroke="#161c28" stroke-width="14" fill="none" stroke-dasharray="502" stroke-dashoffset="100" stroke-linecap="round"/>
+                    <circle id="tach-fill" cx="100" cy="100" r="80" stroke="#00ff88" stroke-width="14" fill="none" stroke-dasharray="502" stroke-dashoffset="502" stroke-linecap="round" style="transition: stroke-dashoffset 0.25s ease, stroke 0.3s ease;"/>
+                </svg>
+                <div class="tach-content">
+                    <div id="rpm-val" class="tach-number">1450</div>
+                    <div class="tach-label">RPM &times; 1000</div>
+                </div>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">ENGINE OIL PRESSURE</span>
+                <span id="oil-press" class="stat-val">4.3 BAR (NOMINAL)</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">COOLANT TEMPERATURE</span>
+                <span id="coolant-temp" class="stat-val">87 °C</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">DEF / ADBLUE LEVEL</span>
+                <span class="stat-val" style="color: var(--accent-cyan);">84 %</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">DIESEL FUEL TANK</span>
+                <span class="stat-val" style="color: var(--accent-green);">380 L / 420 L</span>
+            </div>
+
+            <div class="stat-row">
+                <span class="stat-label">TRIP ODOMETER</span>
+                <span class="stat-val">1,248.6 KM</span>
+            </div>
+        </section>
+
+        <!-- Center: Speedometer, Air Brakes & ADAS State -->
+        <section class="panel center-cluster">
+            <div class="panel-header" style="width: 100%;">
+                <span>PRIMARY INSTRUMENT CLUSTER</span>
+                <span id="risk-header-badge" style="color: var(--accent-green); font-weight: 800;">NORMAL RISK</span>
+            </div>
+
+            <div class="speedo-dial-wrap">
+                <svg class="speedo-svg" viewBox="0 0 220 220">
+                    <circle class="speedo-track" cx="110" cy="110" r="90" />
+                    <circle id="speedo-fill" class="speedo-fill" cx="110" cy="110" r="90" />
+                </svg>
+                <div class="speedo-content">
+                    <div id="speed-display" class="speed-number">60</div>
+                    <div class="speed-unit">KM / H</div>
+                    <div id="gear-display" class="gear-pill">GEAR: D-08</div>
+                    <div id="overspeed-tag" class="overspeed-tag">⚠️ OVERSPEED GOVERNOR ARMED</div>
+                </div>
+            </div>
+
+            <!-- Pneumatic Air Brake Reservoirs -->
+            <div class="pneumatic-grid">
+                <div class="air-gauge-card">
+                    <div class="air-label">AIR RESERVOIR 1 (STEER)</div>
+                    <div id="air1-val" class="air-val">124 PSI</div>
+                    <div class="air-bar-track">
+                        <div id="air1-bar" class="air-bar-fill" style="width: 96%;"></div>
+                    </div>
+                </div>
+
+                <div class="air-gauge-card">
+                    <div class="air-label">AIR RESERVOIR 2 (TRAILER)</div>
+                    <div id="air2-val" class="air-val">122 PSI</div>
+                    <div class="air-bar-track">
+                        <div id="air2-bar" class="air-bar-fill" style="width: 94%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commercial ADAS Indicators -->
+            <div class="adas-bar">
+                <div class="adas-badge active">[ LKA ] LANE KEEP</div>
+                <div class="adas-badge active">[ AEB ] AUTO BRAKE</div>
+                <div class="adas-badge active">[ EXH ] RETARDER</div>
+                <div id="dms-badge" class="adas-badge active">[ DMS ] DRISHTI ARMED</div>
+                <div class="adas-badge active">[ AIS-140 ] GPS LOCK</div>
+            </div>
+        </section>
+
+        <!-- Right: Driver Monitoring HUD (PiP) & Hugging Face Biometrics -->
+        <section class="panel">
+            <div class="panel-header">
+                <span>IN-CABIN DRIVER MONITOR (DMS)</span>
+                <span id="hf-model-tag" style="color: var(--accent-cyan);">HUGGING FACE</span>
+            </div>
+
+            <div class="video-box">
+                <img src="/video_feed" alt="Driver DMS Stream" id="dms-cam-feed">
+                <div class="dms-live-badge">
+                    <div class="dms-live-dot"></div>
+                    <span>DMS SENSOR LIVE</span>
+                </div>
+            </div>
+
+            <div class="meter-group">
+                <div class="meter-header">
+                    <span style="color: var(--text-dim);">DRIVER IDENTIFICATION</span>
+                    <span id="driver-id-tag" style="color: var(--accent-green); font-weight: 800;">Rohit Rajesh</span>
+                </div>
+
+                <div class="meter-header">
+                    <span style="color: var(--text-dim);">MAIN AI (TRANSFORMER)</span>
+                    <span id="hf-state-tag" style="color: var(--accent-cyan); font-weight: 800;">ALERT (98%)</span>
+                </div>
+
+                <div>
+                    <div class="meter-header">
+                        <span style="color: var(--text-dim);">EYE ASPECT RATIO (EAR)</span>
+                        <span id="ear-readout" style="font-weight: 700;">0.310 (LIMIT: 0.22)</span>
+                    </div>
+                    <div class="meter-track">
+                        <div id="ear-bar" class="meter-fill" style="width: 75%;"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="meter-header">
+                        <span style="color: var(--text-dim);">MICROSLEEP TIMER (&gt; 1.5s)</span>
+                        <span id="eye-timer-readout" style="font-weight: 700;">0.0s / 1.5s</span>
+                    </div>
+                    <div class="meter-track">
+                        <div id="eye-timer-bar" class="meter-fill" style="width: 0%; background: var(--accent-amber);"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="meter-header">
+                        <span style="color: var(--text-dim);">TEMPORAL DISTRACTION</span>
+                        <span id="distract-readout" style="font-weight: 700;">0 / 24 frames</span>
+                    </div>
+                    <div class="meter-track">
+                        <div id="distract-bar" class="meter-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Drive-by-Wire Controls -->
+    <footer class="controls-bar">
+        <div class="key-hints">
+            <span class="hint-text">🕹️ DRIVE CONTROLS:</span>
+            <span><span class="key-badge">W</span> or <span class="key-badge">&uarr;</span> Accel (+5)</span>
+            <span><span class="key-badge">S</span> or <span class="key-badge">&darr;</span> Air Brakes (-8)</span>
+            <span><span class="key-badge">SPACE</span> Full Pneumatic Stop</span>
+            <span><span class="key-badge">1</span> 60 km/h Cruise</span>
+            <span><span class="key-badge">2</span> 85 km/h Overspeed</span>
+        </div>
+
+        <div class="action-btns">
+            <button class="cockpit-btn" onclick="sendSpeedDelta(5)">▲ Throttle (+5)</button>
+            <button class="cockpit-btn btn-brake" onclick="sendSpeedDelta(-8)">▼ Air Brake</button>
+            <button class="cockpit-btn btn-brake" onclick="emergencyStop()">🛑 Emergency Air Brake</button>
+            <button class="cockpit-btn" onclick="setSpeed(60)">Cruise (60)</button>
+            <button class="cockpit-btn" onclick="setSpeed(85)" style="color: var(--accent-red); border-color: rgba(255,42,68,0.4);">Overspeed (85)</button>
+            <button class="cockpit-btn" onclick="testAudio()" title="Test In-Cab Alert Audio">🔊 Test Buzzer</button>
+        </div>
+    </footer>
+
+    <!-- QR Code Modal for Phone Dispatch Link -->
+    <div id="qr-modal" class="modal-overlay" onclick="closeQrModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <h3 style="font-size: 18px; font-weight: 800; color: #ffffff;">📱 FLEET OPERATIONS CONTROL ROOM</h3>
+            <p style="font-size: 13px; color: var(--text-dim);">
+                Scan this QR code with any smartphone or tablet on the same Wi-Fi to open the live Fleet Dispatcher view.
+            </p>
+            <div class="modal-qr-frame">
+                <img id="qr-img" src="" alt="Scan for Control Room">
+            </div>
+            <div class="url-box" id="modal-url-text">Loading URL...</div>
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <button class="cockpit-btn" style="flex: 1; justify-content: center;" onclick="copyUrl()">📋 Copy URL</button>
+                <button class="cockpit-btn" style="flex: 1; justify-content: center;" onclick="closeQrModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web Audio Synthesizer Engine -->
+    <script>
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        // Air brake pneumatic release hiss sound
+        function playAirBrakeHiss() {
+            try {
+                const ctx = getAudioContext();
+                const bufferSize = ctx.sampleRate * 0.35;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.12));
+                }
+                const noise = ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1400, ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.35);
+
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                noise.start();
+            } catch(e) {}
+        }
+
+        // High decibel commercial truck in-cab wake up buzzer
+        let buzzerOsc = null;
+        let buzzerGain = null;
+
+        function startEmergencyBuzzer() {
+            if (buzzerOsc) return;
+            try {
+                const ctx = getAudioContext();
+                buzzerOsc = ctx.createOscillator();
+                buzzerGain = ctx.createGain();
+
+                buzzerOsc.type = 'sawtooth';
+                buzzerOsc.frequency.setValueAtTime(1250, ctx.currentTime);
+
+                // Pulsing amplitude modulation
+                const lfo = ctx.createOscillator();
+                lfo.frequency.setValueAtTime(6, ctx.currentTime); // 6 Hz pulse
+                const lfoGain = ctx.createGain();
+                lfoGain.gain.setValueAtTime(0.2, ctx.currentTime);
+
+                buzzerGain.gain.setValueAtTime(0.35, ctx.currentTime);
+
+                buzzerOsc.connect(buzzerGain);
+                buzzerGain.connect(ctx.destination);
+                buzzerOsc.start();
+            } catch(e) {}
+        }
+
+        function stopEmergencyBuzzer() {
+            if (buzzerOsc) {
+                try {
+                    buzzerOsc.stop();
+                    buzzerOsc.disconnect();
+                } catch(e) {}
+                buzzerOsc = null;
+                buzzerGain = null;
+            }
+        }
+
+        function playDistractionChime() {
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.18, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.25);
+            } catch(e) {}
+        }
+
+        function testAudio() {
+            getAudioContext();
+            playAirBrakeHiss();
+            setTimeout(() => {
+                startEmergencyBuzzer();
+                setTimeout(stopEmergencyBuzzer, 800);
+            }, 300);
+        }
+
+        // Drive-by-Wire Networking
+        let currentAirPressure = 125.0;
+        let remoteControlUrl = "";
+
+        async function sendSpeedDelta(delta) {
+            getAudioContext();
+            if (delta < 0) {
+                playAirBrakeHiss();
+                currentAirPressure = Math.max(90.0, currentAirPressure - 3.5);
+            }
+            try {
+                await fetch('/api/speed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ delta: delta })
+                });
+            } catch(e) {}
+        }
+
+        async function setSpeed(targetSpeed) {
+            getAudioContext();
+            try {
+                await fetch('/api/speed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ speed: targetSpeed })
+                });
+            } catch(e) {}
+        }
+
+        async function emergencyStop() {
+            getAudioContext();
+            playAirBrakeHiss();
+            currentAirPressure = Math.max(80.0, currentAirPressure - 12.0);
+            await setSpeed(0);
+        }
+
+        // Keyboard Drive-by-Wire
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                e.preventDefault();
+                sendSpeedDelta(5);
+            } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                e.preventDefault();
+                sendSpeedDelta(-8);
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                emergencyStop();
+            } else if (e.key === '1') {
+                e.preventDefault();
+                setSpeed(60);
+            } else if (e.key === '2') {
+                e.preventDefault();
+                setSpeed(85);
+            }
+        });
+
+        // Air Compressor Simulation
+        setInterval(() => {
+            if (currentAirPressure < 125.0) {
+                currentAirPressure = Math.min(125.0, currentAirPressure + 0.4);
+            }
+            const p1 = currentAirPressure.toFixed(0);
+            const p2 = (currentAirPressure - 2.5).toFixed(0);
+            document.getElementById('air1-val').innerText = `${p1} PSI`;
+            document.getElementById('air2-val').innerText = `${p2} PSI`;
+            const pct1 = Math.min(100, Math.round((currentAirPressure / 130) * 100));
+            const pct2 = Math.min(100, Math.round(((currentAirPressure - 2.5) / 130) * 100));
+            document.getElementById('air1-bar').style.width = pct1 + '%';
+            document.getElementById('air2-bar').style.width = pct2 + '%';
+            if (currentAirPressure < 95) {
+                document.getElementById('air1-val').style.color = 'var(--accent-red)';
+                document.getElementById('air1-bar').style.background = 'var(--accent-red)';
+            } else {
+                document.getElementById('air1-val').style.color = 'var(--accent-green)';
+                document.getElementById('air1-bar').style.background = 'var(--accent-green)';
+            }
+        }, 400);
+
+        // QR Modal Controls
+        function openQrModal() {
+            document.getElementById('qr-modal').style.display = 'flex';
+        }
+
+        function closeQrModal() {
+            document.getElementById('qr-modal').style.display = 'none';
+        }
+
+        function copyUrl() {
+            if (remoteControlUrl) {
+                navigator.clipboard.writeText(remoteControlUrl);
+                alert("Copied Fleet Control Room URL:\n" + remoteControlUrl);
+            }
+        }
+
+        // Live Telemetry Poller
+        let lastBuzzerState = false;
+
+        async function pollCockpitTelemetry() {
+            try {
+                const resp = await fetch('/api/telemetry');
+                const data = await resp.json();
+
+                // Speedometer updates
+                const speed = Math.round(data.speed_kph || 0);
+                document.getElementById('speed-display').innerText = speed;
+
+                // SVG Speedo needle/arc calculation (max 140 km/h)
+                const speedCirc = 565; // approx 2 * PI * 90
+                const speedPct = Math.min(1.0, speed / 140);
+                const offset = speedCirc - (speedPct * (speedCirc * 0.75));
+                const speedoFill = document.getElementById('speedo-fill');
+                speedoFill.style.strokeDashoffset = offset;
+
+                // Tachometer RPM & Gear simulation
+                let gearNum = Math.max(1, Math.min(12, Math.floor(speed / 11) + 1));
+                if (speed === 0) gearNum = 1;
+                document.getElementById('gear-display').innerText = `GEAR: D-${gearNum.toString().padStart(2, '0')}`;
+
+                let rpm = 700 + (speed > 0 ? ((speed % 12) * 120) + 300 : 0);
+                document.getElementById('rpm-val').innerText = Math.round(rpm);
+                const tachCirc = 502;
+                const rpmPct = Math.min(1.0, rpm / 3000);
+                const tachOffset = tachCirc - (rpmPct * (tachCirc * 0.75));
+                const tachFill = document.getElementById('tach-fill');
+                tachFill.style.strokeDashoffset = tachOffset;
+
+                if (rpm > 2200) {
+                    tachFill.style.stroke = 'var(--accent-red)';
+                } else if (rpm > 1800) {
+                    tachFill.style.stroke = 'var(--accent-amber)';
+                } else {
+                    tachFill.style.stroke = 'var(--accent-green)';
+                }
+
+                // Overspeed warnings
+                const overspeedTag = document.getElementById('overspeed-tag');
+                if (data.overspeed) {
+                    overspeedTag.style.display = 'block';
+                    speedoFill.style.stroke = 'var(--accent-red)';
+                    document.getElementById('speed-display').style.color = 'var(--accent-red)';
+                } else {
+                    overspeedTag.style.display = 'none';
+                    speedoFill.style.stroke = 'var(--accent-green)';
+                    document.getElementById('speed-display').style.color = '#ffffff';
+                }
+
+                // Driver biometrics & Hugging Face
+                document.getElementById('driver-id-tag').innerText = data.driver_id || 'Rohit Rajesh';
+                const hfState = data.hf_state || data.emotion || 'ALERT';
+                const hfScore = Math.round((data.hf_score || data.emotion_score || 0.98) * 100);
+                document.getElementById('hf-state-tag').innerText = `${hfState} (${hfScore}%)`;
+
+                const ear = (data.ear || 0).toFixed(3);
+                document.getElementById('ear-readout').innerText = `${ear} (LIMIT: 0.22)`;
+                const earPct = Math.min(100, Math.round((data.ear / 0.4) * 100));
+                document.getElementById('ear-bar').style.width = earPct + '%';
+                document.getElementById('ear-bar').style.background = (data.ear < 0.22 && data.face_detected) ? 'var(--accent-red)' : 'var(--accent-green)';
+
+                // Eye closure countdown
+                const closed = data.closed_duration || 0;
+                document.getElementById('eye-timer-readout').innerText = `${closed.toFixed(1)}s / 1.5s`;
+                const eyePct = Math.min(100, Math.round((closed / 1.5) * 100));
+                document.getElementById('eye-timer-bar').style.width = eyePct + '%';
+
+                // Distraction counter
+                const distract = data.distraction_counter || 0;
+                document.getElementById('distract-readout').innerText = `${distract} / 24 frames`;
+                const distractPct = Math.min(100, Math.round((distract / 24) * 100));
+                document.getElementById('distract-bar').style.width = distractPct + '%';
+
+                // Remote Dispatcher Commands & In-Cab Buzzers
+                const alertBanner = document.getElementById('alert-banner');
+                const remote = data.remote_commands || {};
+                const isBuzzerActive = data.drowsy || remote.buzzer_active;
+
+                if (isBuzzerActive) {
+                    startEmergencyBuzzer();
+                    alertBanner.style.display = 'block';
+                    alertBanner.className = 'banner-critical';
+                    if (remote.buzzer_active) {
+                        alertBanner.innerText = '🚨 FLEET DISPATCHER IN-CAB EMERGENCY WAKE-UP ALARM ACTIVATED!';
+                    } else {
+                        alertBanner.innerText = '🚨 CRITICAL DROWSINESS DETECTED (EYES CLOSED > 1.5s) — IN-CAB WAKE UP BUZZER ACTIVE!';
+                    }
+                } else if (remote.pull_over) {
+                    stopEmergencyBuzzer();
+                    alertBanner.style.display = 'block';
+                    alertBanner.className = 'banner-directive';
+                    alertBanner.innerText = `🛑 FLEET DISPATCH NOTICE: ${remote.pull_over_msg || 'MANDATORY FATIGUE BREAK REQUIRED. PULL OVER TO NEAREST SAFE HAVEN.'}`;
+                } else if (data.distracted) {
+                    stopEmergencyBuzzer();
+                    alertBanner.style.display = 'block';
+                    alertBanner.className = 'banner-directive';
+                    alertBanner.innerText = '⚠️ CAUTION: DISTRACTED DRIVING DETECTED — KEEP EYES ON ROAD';
+                } else {
+                    stopEmergencyBuzzer();
+                    alertBanner.style.display = 'none';
+                }
+
+                // Network & Satellite Uplink Pill
+                const uplinkPill = document.getElementById('uplink-pill');
+                if (data.network_link && data.network_link.includes('Satellite')) {
+                    uplinkPill.className = 'status-pill pill-satellite';
+                    uplinkPill.innerHTML = '<span>🛰️ JioSpaceFiber Satellite (SES Constellation)</span>';
+                } else {
+                    uplinkPill.className = 'status-pill pill-cellular';
+                    uplinkPill.innerHTML = '<span>📶 Jio 4G/5G Cellular Link</span>';
+                }
+
+                // QR Code Setup
+                if (data.control_room_url && data.control_room_url !== remoteControlUrl) {
+                    remoteControlUrl = data.control_room_url;
+                    document.getElementById('modal-url-text').innerText = remoteControlUrl;
+                    document.getElementById('qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(remoteControlUrl)}`;
+                }
+
+                // Dispatcher Active Pill
+                const dispatcherPill = document.getElementById('dispatcher-pill');
+                if (data.dispatchers_connected > 0) {
+                    dispatcherPill.style.background = 'rgba(0, 255, 136, 0.15)';
+                    dispatcherPill.style.color = 'var(--accent-green)';
+                    dispatcherPill.style.borderColor = 'rgba(0, 255, 136, 0.4)';
+                    dispatcherPill.innerHTML = `<span>🟢 ${data.dispatchers_connected} Fleet Dispatcher(s) Live</span>`;
+                } else {
+                    dispatcherPill.style.background = 'rgba(0, 229, 255, 0.1)';
+                    dispatcherPill.style.color = 'var(--accent-cyan)';
+                    dispatcherPill.style.borderColor = 'rgba(0, 229, 255, 0.3)';
+                    dispatcherPill.innerHTML = `<span>📱 Scan for Fleet HQ</span>`;
+                }
+
+            } catch(e) {}
+        }
+
+        setInterval(pollCockpitTelemetry, 250);
+    </script>
+</body>
+</html>

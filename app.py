@@ -1,7 +1,8 @@
 import os
+import socket
 import time
 
-from flask import Flask, Response, jsonify, render_template_string, request
+from flask import Flask, Response, jsonify, render_template, render_template_string, request
 import cv2
 import numpy as np
 from ai_tracking.driver_monitor import DrishtiAIDMS
@@ -10,6 +11,30 @@ app = Flask(__name__)
 dms_system = DrishtiAIDMS()
 
 vehicle_speed_kph = 60.0
+
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+remote_commands = {
+    "buzzer_active": False,
+    "buzzer_until": 0.0,
+    "pull_over": False,
+    "pull_over_msg": "",
+    "force_satellite": False,
+}
+
+connected_dispatchers = {}
+incident_log = []
+last_drowsy_logged = False
+
 
 latest_telemetry = {
     "drowsy": False,
@@ -217,7 +242,10 @@ def generate_frames():
             reasons = list(edge.get("reasons", []))
             primary_reason = reasons[0][:4] if reasons else "none"
             compact_packet = f"DRST|V1|R:{risk_level[:3]}|F:{primary_reason}"
-            network_link = "JioSpaceFiber Satellite (Priority Uplink)" if risk_level == "HIGH" else "Jio 4G/5G Cellular"
+            if remote_commands.get("force_satellite"):
+                network_link = "JioSpaceFiber Satellite (Manual Override)"
+            else:
+                network_link = "JioSpaceFiber Satellite (Priority Uplink)" if risk_level == "HIGH" else "Jio 4G/5G Cellular"
 
             latest_telemetry = {
                 "drowsy": bool(alerts.get("drowsy")),
@@ -268,7 +296,46 @@ def video_feed():
 
 @app.route('/api/telemetry')
 def api_telemetry():
-    return jsonify(latest_telemetry)
+    global last_drowsy_logged
+    now = time.time()
+
+    # Track connected dispatchers
+    if request.args.get("client") == "dispatcher":
+        connected_dispatchers[request.remote_addr] = now
+
+    # Prune inactive dispatchers (> 12s inactivity)
+    stale_keys = [k for k, v in list(connected_dispatchers.items()) if now - v > 12.0]
+    for k in stale_keys:
+        connected_dispatchers.pop(k, None)
+
+    # Check buzzer expiry
+    if remote_commands["buzzer_active"] and now > remote_commands["buzzer_until"]:
+        remote_commands["buzzer_active"] = False
+
+    # Auto-log safety critical incidents
+    is_drowsy = latest_telemetry.get("drowsy", False)
+    if is_drowsy and not last_drowsy_logged:
+        incident_log.insert(0, {
+            "id": len(incident_log) + 1,
+            "timestamp": time.strftime("%H:%M:%S"),
+            "event": "CRITICAL: Driver Micro-Sleep Detected (>1.5s)",
+            "speed_kph": latest_telemetry.get("speed_kph", vehicle_speed_kph),
+            "risk_level": "HIGH",
+            "driver": latest_telemetry.get("driver_id", "Rohit Rajesh"),
+            "network": latest_telemetry.get("network_link", "JioSpaceFiber Satellite")
+        })
+        last_drowsy_logged = True
+    elif not is_drowsy:
+        last_drowsy_logged = False
+
+    telemetry_copy = dict(latest_telemetry)
+    local_ip = get_local_ip()
+    port = int(os.environ.get("DRISHTI_PORT", "5000"))
+    telemetry_copy["local_ip"] = local_ip
+    telemetry_copy["control_room_url"] = f"http://{local_ip}:{port}/control-room"
+    telemetry_copy["dispatchers_connected"] = len(connected_dispatchers)
+    telemetry_copy["remote_commands"] = remote_commands
+    return jsonify(telemetry_copy)
 
 @app.route('/api/speed', methods=['GET', 'POST'])
 def api_speed():
@@ -281,9 +348,77 @@ def api_speed():
             vehicle_speed_kph = max(0.0, min(160.0, float(payload["speed"])))
     return jsonify({"speed_kph": round(vehicle_speed_kph, 1), "overspeed": vehicle_speed_kph >= 80.0})
 
+@app.route('/api/remote_action', methods=['POST'])
+def api_remote_action():
+    data = request.get_json(silent=True) or {}
+    action = data.get("action", "")
+    now = time.time()
+
+    if action == "trigger_buzzer":
+        remote_commands["buzzer_active"] = True
+        remote_commands["buzzer_until"] = now + 4.0
+        incident_log.insert(0, {
+            "id": len(incident_log) + 1,
+            "timestamp": time.strftime("%H:%M:%S"),
+            "event": "DISPATCHER ACTION: In-Cab Emergency Wake-Up Alarm Buzzer Triggered",
+            "speed_kph": round(vehicle_speed_kph, 1),
+            "risk_level": latest_telemetry.get("risk_level", "NORMAL"),
+            "driver": latest_telemetry.get("driver_id", "Rohit Rajesh"),
+            "network": latest_telemetry.get("network_link", "Cellular")
+        })
+    elif action == "force_satellite":
+        remote_commands["force_satellite"] = not remote_commands["force_satellite"]
+        incident_log.insert(0, {
+            "id": len(incident_log) + 1,
+            "timestamp": time.strftime("%H:%M:%S"),
+            "event": f"DISPATCHER ACTION: Forced Satellite Failover -> {remote_commands['force_satellite']}",
+            "speed_kph": round(vehicle_speed_kph, 1),
+            "risk_level": latest_telemetry.get("risk_level", "NORMAL"),
+            "driver": latest_telemetry.get("driver_id", "Rohit Rajesh"),
+            "network": "JioSpaceFiber (SES Constellation)"
+        })
+    elif action == "pull_over":
+        remote_commands["pull_over"] = True
+        remote_commands["pull_over_msg"] = data.get("message", "MANDATORY FATIGUE BREAK REQUIRED. PULL OVER SAFELY.")
+        incident_log.insert(0, {
+            "id": len(incident_log) + 1,
+            "timestamp": time.strftime("%H:%M:%S"),
+            "event": "DISPATCHER ACTION: Mandatory Rest Directive Sent",
+            "speed_kph": round(vehicle_speed_kph, 1),
+            "risk_level": "WARNING",
+            "driver": latest_telemetry.get("driver_id", "Rohit Rajesh"),
+            "network": latest_telemetry.get("network_link", "Cellular")
+        })
+    elif action == "clear_directive":
+        remote_commands["pull_over"] = False
+        remote_commands["pull_over_msg"] = ""
+
+    return jsonify({"status": "success", "action": action, "remote_commands": remote_commands})
+
+@app.route('/api/audit_log')
+def api_audit_log():
+    return jsonify({
+        "vehicle_id": "DL-01-EA-4412",
+        "asset": "BharatBenz 5528.T Commercial Hauler",
+        "driver": "Rohit Rajesh (ID: DRV-8821)",
+        "total_events": len(incident_log),
+        "events": incident_log
+    })
+
 @app.route('/')
-def index():
+@app.route('/cockpit')
+def cockpit():
+    return render_template('cockpit.html')
+
+@app.route('/control-room')
+@app.route('/fleet')
+def control_room():
+    return render_template('control_room.html')
+
+@app.route('/legacy')
+def legacy_dashboard():
     dashboard_html = """
+
     <!DOCTYPE html>
     <html lang="en">
     <head>
