@@ -1,3 +1,4 @@
+from functools import wraps
 import os
 import socket
 import time
@@ -6,9 +7,27 @@ from flask import Flask, Response, jsonify, render_template, render_template_str
 import cv2
 import numpy as np
 from ai_tracking.driver_monitor import DrishtiAIDMS
+from ai_tracking.security import EdgeApiSecurity, TelemetrySigner
 
 app = Flask(__name__)
 dms_system = DrishtiAIDMS()
+
+
+def require_fleet_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if app.config.get("TESTING") and not app.config.get("DRISHTI_ENFORCE_AUTH"):
+            return f(*args, **kwargs)
+
+        token = EdgeApiSecurity.extract_token_from_request(request)
+        if not EdgeApiSecurity.is_valid_token(token):
+            return jsonify({
+                "status": "error",
+                "code": 401,
+                "message": "Unauthorized: Valid X-Drishti-Fleet-Token or Bearer token required for remote fleet actions.",
+            }), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 vehicle_speed_kph = 60.0
 
@@ -241,7 +260,10 @@ def generate_frames():
             risk_level = str(edge.get("risk_level", "NORMAL"))
             reasons = list(edge.get("reasons", []))
             primary_reason = reasons[0][:4] if reasons else "none"
-            compact_packet = f"DRST|V1|R:{risk_level[:3]}|F:{primary_reason}"
+            compact_packet = TelemetrySigner.sign_satellite_packet({
+                "risk_level": risk_level,
+                "reasons": reasons,
+            })
             if remote_commands.get("force_satellite"):
                 network_link = "JioSpaceFiber Satellite (Manual Override)"
             else:
@@ -335,12 +357,25 @@ def api_telemetry():
     telemetry_copy["control_room_url"] = f"http://{local_ip}:{port}/control-room"
     telemetry_copy["dispatchers_connected"] = len(connected_dispatchers)
     telemetry_copy["remote_commands"] = remote_commands
+    telemetry_copy["security"] = {
+        "mode": "HMAC-SHA256 Signed",
+        "auth_required_for_control": True,
+        "token_active": bool(EdgeApiSecurity.is_valid_token(EdgeApiSecurity.extract_token_from_request(request))),
+    }
     return jsonify(telemetry_copy)
 
 @app.route('/api/speed', methods=['GET', 'POST'])
 def api_speed():
     global vehicle_speed_kph
     if request.method == 'POST':
+        if not (app.config.get("TESTING") and not app.config.get("DRISHTI_ENFORCE_AUTH")):
+            token = EdgeApiSecurity.extract_token_from_request(request)
+            if not EdgeApiSecurity.is_valid_token(token):
+                return jsonify({
+                    "status": "error",
+                    "code": 401,
+                    "message": "Unauthorized: Valid X-Drishti-Fleet-Token required to modulate vehicle speed.",
+                }), 401
         payload = request.get_json(silent=True) or {}
         if "delta" in payload:
             vehicle_speed_kph = max(0.0, min(160.0, vehicle_speed_kph + float(payload["delta"])))
@@ -349,6 +384,7 @@ def api_speed():
     return jsonify({"speed_kph": round(vehicle_speed_kph, 1), "overspeed": vehicle_speed_kph >= 80.0})
 
 @app.route('/api/remote_action', methods=['POST'])
+@require_fleet_auth
 def api_remote_action():
     data = request.get_json(silent=True) or {}
     action = data.get("action", "")
@@ -396,6 +432,7 @@ def api_remote_action():
     return jsonify({"status": "success", "action": action, "remote_commands": remote_commands})
 
 @app.route('/api/audit_log')
+@require_fleet_auth
 def api_audit_log():
     return jsonify({
         "vehicle_id": "DL-01-EA-4412",
@@ -408,12 +445,14 @@ def api_audit_log():
 @app.route('/')
 @app.route('/cockpit')
 def cockpit():
-    return render_template('cockpit.html')
+    token = EdgeApiSecurity.get_active_token()
+    return render_template('cockpit.html', api_token=token)
 
 @app.route('/control-room')
 @app.route('/fleet')
 def control_room():
-    return render_template('control_room.html')
+    token = EdgeApiSecurity.get_active_token()
+    return render_template('control_room.html', api_token=token)
 
 @app.route('/legacy')
 def legacy_dashboard():

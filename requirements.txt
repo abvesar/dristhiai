@@ -9,3 +9,5 @@ huggingface_hub>=0.24.0
 transformers>=4.45.0
 torch>=2.2.0
 pillow>=10.0.0
+gradio>=5.0.0
+reportlab>=4.0.0

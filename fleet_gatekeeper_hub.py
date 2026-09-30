@@ -21,6 +21,7 @@ from ai_tracking.safety_core import (
     DriverBehaviorMonitor,
     DriverBehaviorSignal,
 )
+from ai_tracking.security import TelemetrySigner
 
 
 # ---------------------------------------------------------------------------
@@ -137,8 +138,17 @@ class KeyboardDriverSignalAdapter(FixedDriverSignalAdapter):
 # Transmission adapters
 # ---------------------------------------------------------------------------
 class CloudTransmissionAdapter:
+    def __init__(self, secret_key: bytes | None = None) -> None:
+        self.secret_key = secret_key
+
     def send_alert(self, payload: Dict[str, object]) -> bool:
-        print(f"cloud_tx driver_id={payload.get('driver_id')} risk={payload.get('risk_level')} reasons={payload.get('reasons')}")
+        signed_payload = TelemetrySigner.sign_cloud_payload(payload, secret_key=self.secret_key)
+        auth = signed_payload.get("_auth", {})
+        sig_hint = str(auth.get("signature", ""))[:8]
+        print(
+            f"cloud_tx_secure driver_id={signed_payload.get('driver_id')} risk={signed_payload.get('risk_level')} reasons={signed_payload.get('reasons')} sig={sig_hint}...",
+            flush=True,
+        )
         return True
 
     def flush_pending(self) -> int:
@@ -146,16 +156,15 @@ class CloudTransmissionAdapter:
 
 
 class SatelliteTransmissionAdapter:
-    def __init__(self, provider: str = "JioSpaceFiber") -> None:
+    def __init__(self, provider: str = "JioSpaceFiber", secret_key: bytes | None = None) -> None:
         self.provider = provider
+        self.secret_key = secret_key
 
     def send_alert(self, payload: Dict[str, object]) -> bool:
-        risk_level = str(payload.get("risk_level", "NORMAL"))
-        reasons = [str(reason) for reason in payload.get("reasons", [])]
-        reason_tag = reasons[0][:4] if reasons else "none"
-        compact_packet = f"DRST|V1|R:{risk_level[:3]}|F:{reason_tag}"
+        signed_packet = TelemetrySigner.sign_satellite_packet(payload, secret_key=self.secret_key)
+        is_valid, _, _ = TelemetrySigner.verify_satellite_packet(signed_packet, secret_key=self.secret_key)
         print(
-            f"🛰️ [SATELLITE_TX] 4G/5G Signal Dead. Pushing compressed hex packet via {self.provider} link: {compact_packet}",
+            f"🛰️ [SATELLITE_TX_SECURE] 4G/5G Signal Dead. Pushing signed hex packet via {self.provider} link (HMAC_VERIFIED={is_valid}): {signed_packet}",
             flush=True,
         )
         return True
@@ -184,6 +193,7 @@ class StoreForwardQueue:
             )
 
     def enqueue(self, payload: Dict[str, object]) -> None:
+        signed_payload = TelemetrySigner.sign_cloud_payload(payload)
         with sqlite3.connect(self.path) as connection:
             connection.execute(
                 """
@@ -191,9 +201,9 @@ class StoreForwardQueue:
                 VALUES (datetime('now'), ?, ?, ?)
                 """,
                 (
-                    str(payload.get("risk_level", "NORMAL")),
-                    json.dumps(payload.get("reasons", [])),
-                    json.dumps(payload, separators=(",", ":")),
+                    str(signed_payload.get("risk_level", "NORMAL")),
+                    json.dumps(signed_payload.get("reasons", [])),
+                    json.dumps(signed_payload, separators=(",", ":")),
                 ),
             )
 

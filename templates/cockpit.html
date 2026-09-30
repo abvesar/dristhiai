@@ -164,17 +164,44 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.6; }
         }
-
-        /* Cockpit Main Grid */
+        /* Cockpit Main Grid — Camera Priority with Side Telematics */
         .cockpit-container {
             display: grid;
-            grid-template-columns: 320px 1fr 340px;
+            grid-template-columns: minmax(0, 1.45fr) minmax(380px, 440px);
             gap: 20px;
             padding: 20px 24px;
             flex: 1;
-            max-width: 1600px;
+            max-width: 1720px;
             margin: 0 auto;
             width: 100%;
+            align-items: start;
+            transition: all 0.3s ease;
+        }
+
+        /* Support Flipping Telematics Left / Camera Right if Desired */
+        .cockpit-container.telematics-left {
+            grid-template-columns: minmax(380px, 440px) minmax(0, 1.45fr);
+        }
+
+        .cockpit-container.telematics-left .priority-camera-panel {
+            order: 2;
+        }
+
+        .cockpit-container.telematics-left .telematics-sidebar {
+            order: 1;
+        }
+
+        @media (max-width: 1120px) {
+            .cockpit-container,
+            .cockpit-container.telematics-left {
+                grid-template-columns: 1fr;
+            }
+            .cockpit-container.telematics-left .priority-camera-panel {
+                order: 1;
+            }
+            .cockpit-container.telematics-left .telematics-sidebar {
+                order: 2;
+            }
         }
 
         .panel {
@@ -199,23 +226,272 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 8px;
+            padding-bottom: 10px;
         }
 
-        /* Center Speedometer & ADAS Cluster */
-        .center-cluster {
+        /* Priority Camera Feed Hero Panel */
+        .priority-camera-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            padding: 10px;
+            gap: 16px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
 
-        .speedo-dial-wrap {
+        .camera-hero-wrapper {
             position: relative;
-            width: 290px;
-            height: 290px;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+        }
+
+        .hero-video-box {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            max-height: 540px;
+            background: radial-gradient(circle at center, #111622 0%, #05070a 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(0, 229, 255, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .hero-video-box:hover {
+            border-color: rgba(0, 229, 255, 0.5);
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.2);
+        }
+
+        .hero-video-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* HUD Overlays & Reticles */
+        .hud-corner {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--accent-cyan);
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0.85;
+        }
+
+        .hud-corner.top-left {
+            top: 12px;
+            left: 12px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .hud-corner.top-right {
+            top: 12px;
+            right: 12px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .hud-corner.bottom-left {
+            bottom: 12px;
+            left: 12px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .hud-corner.bottom-right {
+            bottom: 12px;
+            right: 12px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .dms-overlay-stats {
+            position: absolute;
+            bottom: 14px;
+            left: 14px;
+            right: 14px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 6;
+            gap: 10px;
+        }
+
+        .overlay-badge {
+            background: rgba(8, 10, 15, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            letter-spacing: 0.8px;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+
+        .overlay-badge strong {
+            color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        .dms-live-badge {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 1px solid rgba(0, 255, 136, 0.45);
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--accent-green);
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            backdrop-filter: blur(6px);
+            z-index: 6;
+        }
+
+        .dms-live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: dotBlink 1s infinite;
+        }
+
+        @keyframes dotBlink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.85); } }
+
+        .hud-pill {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .hud-pill-cyan {
+            background: rgba(0, 229, 255, 0.12);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+        }
+
+        .hud-pill-green {
+            background: rgba(0, 255, 136, 0.12);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 255, 136, 0.35);
+        }
+
+        /* Biometrics & Safety Telemetry Strip (directly below camera feed) */
+        .dms-biometrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .bio-card {
+            background: #141924;
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 6px;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .bio-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(0, 229, 255, 0.35);
+        }
+
+        .bio-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }
+
+        .bio-val {
+            font-size: 16px;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+
+        .bio-readout {
+            font-size: 12px;
+            font-weight: 800;
+            color: #ffffff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bio-sub {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+        }
+
+        .bio-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .meter-track {
+            height: 7px;
+            background: #1c2230;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-green);
+            transition: width 0.15s ease, background 0.3s ease;
+        }
+
+        /* Side Telematics Column */
+        .telematics-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .telematics-subcard {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Speedometer in Side Panel */
+        .compact-dial {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            margin: 4px auto;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -255,7 +531,7 @@
         }
 
         .speed-number {
-            font-size: 84px;
+            font-size: 64px;
             font-weight: 900;
             line-height: 1;
             letter-spacing: -2px;
@@ -267,7 +543,7 @@
         }
 
         .speed-unit {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: 2px;
             color: var(--text-dim);
@@ -275,11 +551,11 @@
         }
 
         .gear-pill {
-            margin-top: 10px;
-            padding: 3px 12px;
+            margin-top: 8px;
+            padding: 3px 10px;
             background: #182030;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 800;
             color: var(--accent-cyan);
             letter-spacing: 1px;
@@ -289,7 +565,7 @@
         .overspeed-tag {
             display: none;
             margin-top: 6px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 900;
             color: var(--accent-red);
             letter-spacing: 1px;
@@ -300,21 +576,20 @@
         .pneumatic-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            gap: 12px;
             width: 100%;
-            margin-top: 16px;
         }
 
         .air-gauge-card {
             background: #141924;
             border: 1px solid var(--panel-border);
             border-radius: 10px;
-            padding: 12px;
+            padding: 10px 12px;
             text-align: center;
         }
 
         .air-label {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             color: var(--text-dim);
             text-transform: uppercase;
@@ -322,10 +597,10 @@
         }
 
         .air-val {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 800;
             color: var(--accent-green);
-            margin: 4px 0;
+            margin: 3px 0;
             font-variant-numeric: tabular-nums;
         }
 
@@ -348,8 +623,7 @@
         .adas-bar {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            margin-top: 16px;
+            gap: 6px;
             flex-wrap: wrap;
         }
 
@@ -357,10 +631,10 @@
             background: #151a26;
             border: 1px solid var(--panel-border);
             border-radius: 6px;
-            padding: 5px 10px;
-            font-size: 11px;
+            padding: 4px 8px;
+            font-size: 10.5px;
             font-weight: 700;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.6px;
             color: var(--text-dim);
         }
 
@@ -370,11 +644,11 @@
             background: rgba(0, 255, 136, 0.08);
         }
 
-        /* Left Panel: Heavy Diesel Tachometer & Telemetry */
-        .tach-wrap {
+        /* Tachometer in Side Panel */
+        .compact-tach {
             position: relative;
-            width: 220px;
-            height: 220px;
+            width: 175px;
+            height: 175px;
             margin: 0 auto;
             display: flex;
             align-items: center;
@@ -393,17 +667,23 @@
         }
 
         .tach-number {
-            font-size: 40px;
+            font-size: 34px;
             font-weight: 900;
             color: #ffffff;
             line-height: 1;
         }
 
         .tach-label {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             color: var(--text-dim);
             letter-spacing: 1px;
+        }
+
+        .stat-rows-container {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
         }
 
         .stat-row {
@@ -413,7 +693,7 @@
             padding: 8px 12px;
             background: #141924;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12.5px;
         }
 
         .stat-row .stat-label {
@@ -426,75 +706,26 @@
             color: #ffffff;
         }
 
-        /* Right Panel: Driver Monitoring Feed (PiP) */
-        .video-box {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 4/3;
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid var(--panel-border);
-        }
-
-        .video-box img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .dms-live-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid rgba(0, 255, 136, 0.4);
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 800;
-            color: var(--accent-green);
+        /* Top Bar Layout Switch */
+        .layout-toggle-btn {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.35);
+            border-radius: 8px;
+            padding: 5px 12px;
             display: flex;
             align-items: center;
-            gap: 5px;
-            backdrop-filter: blur(4px);
-        }
-
-        .dms-live-dot {
-            width: 7px;
-            height: 7px;
-            background: var(--accent-green);
-            border-radius: 50%;
-            animation: dotBlink 1s infinite;
-        }
-
-        @keyframes dotBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-        .meter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .meter-header {
-            display: flex;
-            justify-content: space-between;
+            gap: 6px;
+            cursor: pointer;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
+            color: var(--accent-green);
+            transition: all 0.2s ease;
         }
 
-        .meter-track {
-            height: 7px;
-            background: #1c2230;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .meter-fill {
-            height: 100%;
-            width: 0%;
-            background: var(--accent-green);
-            transition: width 0.15s ease, background 0.3s ease;
+        .layout-toggle-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: var(--accent-green);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
         }
 
         /* Drive-by-Wire Bottom Control Bar */
@@ -649,6 +880,10 @@
                 <span>📱 Fleet Dispatcher Link</span>
             </div>
 
+            <div class="layout-toggle-btn" onclick="toggleLayoutOrder()" title="Toggle Camera & Telematics Sides">
+                <span>⇄ FLIP SIDES</span>
+            </div>
+
             <div class="qr-card-trigger" onclick="openQrModal()">
                 <span>📱 SCAN FOR CONTROL ROOM</span>
             </div>
@@ -658,159 +893,191 @@
     <!-- Emergency / Directive Banner -->
     <div id="alert-banner"></div>
 
-    <!-- Cockpit Main Display -->
-    <main class="cockpit-container">
+    <!-- Cockpit Main Display — Camera Feed Priority with Side Telematics -->
+    <main class="cockpit-container" id="cockpit-main-layout">
 
-        <!-- Left: Heavy Diesel Tachometer & Commercial Engine Metrics -->
-        <section class="panel">
+        <!-- PRIMARY: In-Cabin Driver Monitoring System (DMS) Feed & AI Biometrics -->
+        <section class="panel priority-camera-panel">
             <div class="panel-header">
-                <span>CAN-BUS ENGINE TELEMETRY</span>
-                <span style="color: var(--accent-cyan);">OM 926 DIESEL</span>
-            </div>
-
-            <div class="tach-wrap">
-                <svg class="tach-svg" viewBox="0 0 200 200">
-                    <circle cx="100" cy="100" r="80" stroke="#161c28" stroke-width="14" fill="none" stroke-dasharray="502" stroke-dashoffset="100" stroke-linecap="round"/>
-                    <circle id="tach-fill" cx="100" cy="100" r="80" stroke="#00ff88" stroke-width="14" fill="none" stroke-dasharray="502" stroke-dashoffset="502" stroke-linecap="round" style="transition: stroke-dashoffset 0.25s ease, stroke 0.3s ease;"/>
-                </svg>
-                <div class="tach-content">
-                    <div id="rpm-val" class="tach-number">1450</div>
-                    <div class="tach-label">RPM &times; 1000</div>
-                </div>
-            </div>
-
-            <div class="stat-row">
-                <span class="stat-label">ENGINE OIL PRESSURE</span>
-                <span id="oil-press" class="stat-val">4.3 BAR (NOMINAL)</span>
-            </div>
-
-            <div class="stat-row">
-                <span class="stat-label">COOLANT TEMPERATURE</span>
-                <span id="coolant-temp" class="stat-val">87 °C</span>
-            </div>
-
-            <div class="stat-row">
-                <span class="stat-label">DEF / ADBLUE LEVEL</span>
-                <span class="stat-val" style="color: var(--accent-cyan);">84 %</span>
-            </div>
-
-            <div class="stat-row">
-                <span class="stat-label">DIESEL FUEL TANK</span>
-                <span class="stat-val" style="color: var(--accent-green);">380 L / 420 L</span>
-            </div>
-
-            <div class="stat-row">
-                <span class="stat-label">TRIP ODOMETER</span>
-                <span class="stat-val">1,248.6 KM</span>
-            </div>
-        </section>
-
-        <!-- Center: Speedometer, Air Brakes & ADAS State -->
-        <section class="panel center-cluster">
-            <div class="panel-header" style="width: 100%;">
-                <span>PRIMARY INSTRUMENT CLUSTER</span>
-                <span id="risk-header-badge" style="color: var(--accent-green); font-weight: 800;">NORMAL RISK</span>
-            </div>
-
-            <div class="speedo-dial-wrap">
-                <svg class="speedo-svg" viewBox="0 0 220 220">
-                    <circle class="speedo-track" cx="110" cy="110" r="90" />
-                    <circle id="speedo-fill" class="speedo-fill" cx="110" cy="110" r="90" />
-                </svg>
-                <div class="speedo-content">
-                    <div id="speed-display" class="speed-number">60</div>
-                    <div class="speed-unit">KM / H</div>
-                    <div id="gear-display" class="gear-pill">GEAR: D-08</div>
-                    <div id="overspeed-tag" class="overspeed-tag">⚠️ OVERSPEED GOVERNOR ARMED</div>
-                </div>
-            </div>
-
-            <!-- Pneumatic Air Brake Reservoirs -->
-            <div class="pneumatic-grid">
-                <div class="air-gauge-card">
-                    <div class="air-label">AIR RESERVOIR 1 (STEER)</div>
-                    <div id="air1-val" class="air-val">124 PSI</div>
-                    <div class="air-bar-track">
-                        <div id="air1-bar" class="air-bar-fill" style="width: 96%;"></div>
-                    </div>
-                </div>
-
-                <div class="air-gauge-card">
-                    <div class="air-label">AIR RESERVOIR 2 (TRAILER)</div>
-                    <div id="air2-val" class="air-val">122 PSI</div>
-                    <div class="air-bar-track">
-                        <div id="air2-bar" class="air-bar-fill" style="width: 94%;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Commercial ADAS Indicators -->
-            <div class="adas-bar">
-                <div class="adas-badge active">[ LKA ] LANE KEEP</div>
-                <div class="adas-badge active">[ AEB ] AUTO BRAKE</div>
-                <div class="adas-badge active">[ EXH ] RETARDER</div>
-                <div id="dms-badge" class="adas-badge active">[ DMS ] DRISHTI ARMED</div>
-                <div class="adas-badge active">[ AIS-140 ] GPS LOCK</div>
-            </div>
-        </section>
-
-        <!-- Right: Driver Monitoring HUD (PiP) & Hugging Face Biometrics -->
-        <section class="panel">
-            <div class="panel-header">
-                <span>IN-CABIN DRIVER MONITOR (DMS)</span>
-                <span id="hf-model-tag" style="color: var(--accent-cyan);">HUGGING FACE</span>
-            </div>
-
-            <div class="video-box">
-                <img src="/video_feed" alt="Driver DMS Stream" id="dms-cam-feed">
-                <div class="dms-live-badge">
+                <div style="display: flex; align-items: center; gap: 10px;">
                     <div class="dms-live-dot"></div>
-                    <span>DMS SENSOR LIVE</span>
+                    <span style="letter-spacing: 1.5px; font-weight: 800; color: #ffffff;">PRIMARY DRIVER MONITORING FEED (DMS)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="hf-model-tag" class="hud-pill hud-pill-cyan">HUGGING FACE</span>
+                    <span class="hud-pill hud-pill-green">● LIVE 30 FPS</span>
                 </div>
             </div>
 
-            <div class="meter-group">
-                <div class="meter-header">
-                    <span style="color: var(--text-dim);">DRIVER IDENTIFICATION</span>
-                    <span id="driver-id-tag" style="color: var(--accent-green); font-weight: 800;">Rohit Rajesh</span>
+            <!-- Expansive High-Priority Camera Feed -->
+            <div class="camera-hero-wrapper">
+                <div class="video-box hero-video-box">
+                    <img src="/video_feed" alt="Driver DMS Stream" id="dms-cam-feed">
+                    <div class="hud-corner top-left"></div>
+                    <div class="hud-corner top-right"></div>
+                    <div class="hud-corner bottom-left"></div>
+                    <div class="hud-corner bottom-right"></div>
+
+                    <div class="dms-live-badge">
+                        <div class="dms-live-dot"></div>
+                        <span>DMS OPTICAL SENSOR LIVE</span>
+                    </div>
+
+                    <div class="dms-overlay-stats">
+                        <div class="overlay-badge">FACIAL MESH: <strong>ACTIVE (468 PTS)</strong></div>
+                        <div class="overlay-badge">TEMPORAL BUFFER: <strong>24 FRAMES</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Biometrics & Safety Telemetry Strip directly under Camera Feed -->
+            <div class="dms-biometrics-grid">
+                <div class="bio-card">
+                    <div class="bio-label">DRIVER IDENTIFICATION</div>
+                    <div id="driver-id-tag" class="bio-val" style="color: var(--accent-green);">Rohit Rajesh</div>
+                    <div class="bio-sub">VERIFIED BIOMETRIC ID</div>
                 </div>
 
-                <div class="meter-header">
-                    <span style="color: var(--text-dim);">MAIN AI (TRANSFORMER)</span>
-                    <span id="hf-state-tag" style="color: var(--accent-cyan); font-weight: 800;">ALERT (98%)</span>
+                <div class="bio-card">
+                    <div class="bio-label">MAIN AI (TRANSFORMER)</div>
+                    <div id="hf-state-tag" class="bio-val" style="color: var(--accent-cyan);">ALERT (98%)</div>
+                    <div class="bio-sub">EDGE INFERENCE CLASSIFIER</div>
                 </div>
 
-                <div>
-                    <div class="meter-header">
-                        <span style="color: var(--text-dim);">EYE ASPECT RATIO (EAR)</span>
-                        <span id="ear-readout" style="font-weight: 700;">0.310 (LIMIT: 0.22)</span>
+                <div class="bio-card">
+                    <div class="bio-header-flex">
+                        <span class="bio-label">EYE ASPECT RATIO (EAR)</span>
+                        <span id="ear-readout" class="bio-readout">0.310 (LIMIT: 0.22)</span>
                     </div>
                     <div class="meter-track">
                         <div id="ear-bar" class="meter-fill" style="width: 75%;"></div>
                     </div>
+                    <div class="bio-sub">OPTICAL EYE OPENNESS</div>
                 </div>
 
-                <div>
-                    <div class="meter-header">
-                        <span style="color: var(--text-dim);">MICROSLEEP TIMER (&gt; 1.5s)</span>
-                        <span id="eye-timer-readout" style="font-weight: 700;">0.0s / 1.5s</span>
+                <div class="bio-card">
+                    <div class="bio-header-flex">
+                        <span class="bio-label">MICROSLEEP TIMER (&gt; 1.5s)</span>
+                        <span id="eye-timer-readout" class="bio-readout">0.0s / 1.5s</span>
                     </div>
                     <div class="meter-track">
                         <div id="eye-timer-bar" class="meter-fill" style="width: 0%; background: var(--accent-amber);"></div>
                     </div>
+                    <div class="bio-sub">FATIGUE ACCUMULATOR</div>
                 </div>
 
-                <div>
-                    <div class="meter-header">
-                        <span style="color: var(--text-dim);">TEMPORAL DISTRACTION</span>
-                        <span id="distract-readout" style="font-weight: 700;">0 / 24 frames</span>
+                <div class="bio-card">
+                    <div class="bio-header-flex">
+                        <span class="bio-label">TEMPORAL DISTRACTION</span>
+                        <span id="distract-readout" class="bio-readout">0 / 24 frames</span>
                     </div>
                     <div class="meter-track">
                         <div id="distract-bar" class="meter-fill" style="width: 0%;"></div>
                     </div>
+                    <div class="bio-sub">HEAD POSE &amp; YAW TOLERANCE</div>
                 </div>
             </div>
         </section>
+
+        <!-- TO THE SIDE: Consolidated Vehicle Telematics & Instrument Cluster -->
+        <aside class="telematics-sidebar">
+
+            <!-- Primary Instrument Cluster -->
+            <section class="panel telematics-subcard">
+                <div class="panel-header">
+                    <span>PRIMARY INSTRUMENT CLUSTER</span>
+                    <span id="risk-header-badge" style="color: var(--accent-green); font-weight: 800;">NORMAL RISK</span>
+                </div>
+
+                <div class="speedo-dial-wrap compact-dial">
+                    <svg class="speedo-svg" viewBox="0 0 220 220">
+                        <circle class="speedo-track" cx="110" cy="110" r="90" />
+                        <circle id="speedo-fill" class="speedo-fill" cx="110" cy="110" r="90" />
+                    </svg>
+                    <div class="speedo-content">
+                        <div id="speed-display" class="speed-number">60</div>
+                        <div class="speed-unit">KM / H</div>
+                        <div id="gear-display" class="gear-pill">GEAR: D-08</div>
+                        <div id="overspeed-tag" class="overspeed-tag">⚠️ OVERSPEED GOVERNOR ARMED</div>
+                    </div>
+                </div>
+
+                <!-- Pneumatic Air Brake Reservoirs -->
+                <div class="pneumatic-grid">
+                    <div class="air-gauge-card">
+                        <div class="air-label">AIR RESERVOIR 1 (STEER)</div>
+                        <div id="air1-val" class="air-val">124 PSI</div>
+                        <div class="air-bar-track">
+                            <div id="air1-bar" class="air-bar-fill" style="width: 96%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="air-gauge-card">
+                        <div class="air-label">AIR RESERVOIR 2 (TRAILER)</div>
+                        <div id="air2-val" class="air-val">122 PSI</div>
+                        <div class="air-bar-track">
+                            <div id="air2-bar" class="air-bar-fill" style="width: 94%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Commercial ADAS Indicators -->
+                <div class="adas-bar">
+                    <div class="adas-badge active">[ LKA ] LANE KEEP</div>
+                    <div class="adas-badge active">[ AEB ] AUTO BRAKE</div>
+                    <div class="adas-badge active">[ EXH ] RETARDER</div>
+                    <div id="dms-badge" class="adas-badge active">[ DMS ] DRISHTI ARMED</div>
+                    <div class="adas-badge active">[ AIS-140 ] GPS LOCK</div>
+                </div>
+            </section>
+
+            <!-- CAN-Bus Engine Telemetry -->
+            <section class="panel telematics-subcard">
+                <div class="panel-header">
+                    <span>CAN-BUS ENGINE TELEMETRY</span>
+                    <span style="color: var(--accent-cyan);">OM 926 DIESEL</span>
+                </div>
+
+                <div class="tach-wrap compact-tach">
+                    <svg class="tach-svg" viewBox="0 0 200 200">
+                        <circle cx="100" cy="100" r="80" stroke="#161c28" stroke-width="14" fill="none" stroke-dasharray="502" stroke-dashoffset="100" stroke-linecap="round"/>
+                        <circle id="tach-fill" cx="100" cy="100" r="80" stroke="#00ff88" stroke-width="14" fill="none" stroke-dasharray="502" stroke-dashoffset="502" stroke-linecap="round" style="transition: stroke-dashoffset 0.25s ease, stroke 0.3s ease;"/>
+                    </svg>
+                    <div class="tach-content">
+                        <div id="rpm-val" class="tach-number">1450</div>
+                        <div class="tach-label">RPM &times; 1000</div>
+                    </div>
+                </div>
+
+                <div class="stat-rows-container">
+                    <div class="stat-row">
+                        <span class="stat-label">ENGINE OIL PRESSURE</span>
+                        <span id="oil-press" class="stat-val">4.3 BAR (NOMINAL)</span>
+                    </div>
+
+                    <div class="stat-row">
+                        <span class="stat-label">COOLANT TEMPERATURE</span>
+                        <span id="coolant-temp" class="stat-val">87 °C</span>
+                    </div>
+
+                    <div class="stat-row">
+                        <span class="stat-label">DEF / ADBLUE LEVEL</span>
+                        <span class="stat-val" style="color: var(--accent-cyan);">84 %</span>
+                    </div>
+
+                    <div class="stat-row">
+                        <span class="stat-label">DIESEL FUEL TANK</span>
+                        <span class="stat-val" style="color: var(--accent-green);">380 L / 420 L</span>
+                    </div>
+
+                    <div class="stat-row">
+                        <span class="stat-label">TRIP ODOMETER</span>
+                        <span class="stat-val">1,248.6 KM</span>
+                    </div>
+                </div>
+            </section>
+
+        </aside>
 
     </main>
 
@@ -855,6 +1122,7 @@
 
     <!-- Web Audio Synthesizer Engine -->
     <script>
+        const DRISHTI_TOKEN = "{{ api_token or '' }}";
         let audioCtx = null;
 
         function getAudioContext() {
@@ -974,7 +1242,10 @@
             try {
                 await fetch('/api/speed', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Drishti-Fleet-Token': DRISHTI_TOKEN
+                    },
                     body: JSON.stringify({ delta: delta })
                 });
             } catch(e) {}
@@ -985,7 +1256,10 @@
             try {
                 await fetch('/api/speed', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Drishti-Fleet-Token': DRISHTI_TOKEN
+                    },
                     body: JSON.stringify({ speed: targetSpeed })
                 });
             } catch(e) {}
@@ -1162,6 +1436,21 @@
                     alertBanner.style.display = 'none';
                 }
 
+                // Hero Camera Feed Visual Safety Glow
+                const heroVideoBox = document.querySelector('.hero-video-box');
+                if (heroVideoBox) {
+                    if (isBuzzerActive) {
+                        heroVideoBox.style.borderColor = 'var(--accent-red)';
+                        heroVideoBox.style.boxShadow = '0 0 35px rgba(255, 42, 68, 0.6)';
+                    } else if (data.distracted) {
+                        heroVideoBox.style.borderColor = 'var(--accent-amber)';
+                        heroVideoBox.style.boxShadow = '0 0 25px rgba(255, 179, 0, 0.4)';
+                    } else {
+                        heroVideoBox.style.borderColor = 'rgba(0, 229, 255, 0.25)';
+                        heroVideoBox.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.7)';
+                    }
+                }
+
                 // Network & Satellite Uplink Pill
                 const uplinkPill = document.getElementById('uplink-pill');
                 if (data.network_link && data.network_link.includes('Satellite')) {
@@ -1194,6 +1483,20 @@
                 }
 
             } catch(e) {}
+        }
+
+        // Layout Side-Flipping Controls
+        function toggleLayoutOrder() {
+            const container = document.getElementById('cockpit-main-layout');
+            if (!container) return;
+            container.classList.toggle('telematics-left');
+            const isLeft = container.classList.contains('telematics-left');
+            localStorage.setItem('drishti_telematics_left', isLeft ? '1' : '0');
+        }
+
+        // Restore layout preference on load
+        if (localStorage.getItem('drishti_telematics_left') === '1') {
+            document.getElementById('cockpit-main-layout')?.classList.add('telematics-left');
         }
 
         setInterval(pollCockpitTelemetry, 250);

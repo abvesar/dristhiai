@@ -416,6 +416,7 @@
 
     <!-- Mobile Haptic & Audio Alert Script -->
     <script>
+        const DRISHTI_TOKEN = "{{ api_token or '' }}";
         let mobileAudioCtx = null;
         let lastCriticalTime = 0;
 
@@ -474,7 +475,10 @@
             try {
                 await fetch('/api/remote_action', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Drishti-Fleet-Token': DRISHTI_TOKEN
+                    },
                     body: JSON.stringify({ action: 'trigger_buzzer' })
                 });
             } catch(e) {}
@@ -489,7 +493,10 @@
             try {
                 await fetch('/api/remote_action', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Drishti-Fleet-Token': DRISHTI_TOKEN
+                    },
                     body: JSON.stringify({ action: 'force_satellite' })
                 });
             } catch(e) {}
@@ -501,7 +508,10 @@
             try {
                 await fetch('/api/remote_action', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Drishti-Fleet-Token': DRISHTI_TOKEN
+                    },
                     body: JSON.stringify({ 
                         action: 'pull_over',
                         message: 'MANDATORY SAFETY DIRECTIVE: EXCESSIVE FATIGUE. PULL OVER TO NEAREST FUEL OUTLET.'
@@ -512,7 +522,9 @@
 
         async function exportAuditLog() {
             try {
-                const resp = await fetch('/api/audit_log');
+                const resp = await fetch('/api/audit_log', {
+                    headers: { 'X-Drishti-Fleet-Token': DRISHTI_TOKEN }
+                });
                 const logData = await resp.json();
                 const blob = new Blob([JSON.stringify(logData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);

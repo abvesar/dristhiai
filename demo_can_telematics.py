@@ -12,6 +12,7 @@ Controls:
 """
 
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -38,7 +39,10 @@ def send_speed(delta=None, speed=None, port=5000):
         req = urllib.request.Request(
             url,
             data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Drishti-Fleet-Token": os.environ.get("DRISHTI_API_KEY", "drishti-fleet-token-2026"),
+            },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=1.0) as resp:

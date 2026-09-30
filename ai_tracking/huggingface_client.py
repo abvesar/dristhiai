@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import queue
 import threading
 import time
 from typing import Dict, Optional
@@ -53,9 +54,27 @@ class HuggingFaceDriverClassifier:
         self._load_lock = threading.Lock()
         self._last_run = 0.0
         self._last_result: Dict[str, object] = self._base_result("PENDING" if self.enabled else "DISABLED")
-        self._predicting = False
+        self._predict_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._worker_thread = threading.Thread(
+            target=self._worker_loop,
+            name="drishti-hf-worker",
+            daemon=True,
+        )
+        self._worker_thread.start()
         if self.enabled:
             self._ensure_loaded_async()
+
+    def _worker_loop(self) -> None:
+        while True:
+            try:
+                item = self._predict_queue.get()
+                if item is None:
+                    break
+                face_image, now = item
+                self._execute_predict(face_image, now)
+                self._predict_queue.task_done()
+            except Exception:
+                pass
 
     @property
     def is_local_driver_model(self) -> bool:
@@ -94,22 +113,25 @@ class HuggingFaceDriverClassifier:
         if self.min_interval_s <= 0:
             return self._execute_predict(face_image, now)
 
-        # Asynchronous execution for real-time video streaming (zero FPS drop)
-        if not self._predicting:
-            self._predicting = True
-            self._last_run = now
-            threading.Thread(
-                target=self._async_predict_worker,
-                args=(face_image, now),
-                name="drishti-hf-predict",
-                daemon=True,
-            ).start()
+        # Asynchronous execution via single dedicated worker thread (zero thread churn, zero leak)
+        if (now - self._last_run) >= self.min_interval_s:
+            try:
+                self._predict_queue.put_nowait((face_image, now))
+                self._last_run = now
+            except queue.Full:
+                pass
 
         return dict(self._last_result)
 
     def _execute_predict(self, face_image, now: float) -> Dict[str, object]:
         try:
-            prediction = self._predict(face_image)
+            try:
+                import torch
+                with torch.inference_mode():
+                    prediction = self._predict(face_image)
+            except Exception:
+                prediction = self._predict(face_image)
+
             raw_label = str(prediction.get("label") or "UNKNOWN").strip()
             label = raw_label.upper()
             score = round(float(prediction.get("score") or 0.0), 3)
@@ -131,12 +153,6 @@ class HuggingFaceDriverClassifier:
             result = self._base_result("UNAVAILABLE")
             self._last_result = result
             return result
-
-    def _async_predict_worker(self, face_image, now: float) -> None:
-        try:
-            self._execute_predict(face_image, now)
-        finally:
-            self._predicting = False
 
     def _ensure_loaded_async(self) -> None:
         if self._classifier is not None or self._inference_client is not None or self._load_error or not self.enabled:

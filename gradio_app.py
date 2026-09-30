@@ -130,7 +130,7 @@ custom_css = """
 }
 """
 
-with gr.Blocks(title="DRISHTI AI - Central Fleet Command", css=custom_css) as demo:
+with gr.Blocks(title="DRISHTI AI - Central Fleet Command") as demo:
     gr.Markdown(
         """
         # 🚗 DRISHTI AI — Central Fleet & Driver Telemetry Hub
@@ -203,4 +203,5 @@ if __name__ == "__main__":
         server_port=port,
         inbrowser=False,
         show_error=True,
+        css=custom_css,
     )
