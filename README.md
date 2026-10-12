@@ -1,7 +1,7 @@
 # DRISHTI AI 🚗🛰️
 ### Autonomous Edge-AI Driver Safety System & Multi-Tier JioSpaceFiber Satellite Telematics
 
-[![Tests](https://img.shields.io/badge/Tests-19%20Passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-26%20Passing-brightgreen.svg)](tests/)
 [![AI Engine](https://img.shields.io/badge/Perception-MediaPipe%20%2B%20Hugging%20Face-blue.svg)](ai_tracking/)
 [![Satellite](https://img.shields.io/badge/Satellite-JioSpaceFiber%20(SES%20MEO)-00d4ff.svg)](fleet_gatekeeper_hub.py)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](#)
@@ -19,8 +19,9 @@ For team members and live presentations on Windows:
 | Launcher Script | What It Does | Target URL / Output |
 | :--- | :--- | :--- |
 | **`run_demo.bat`** *(Double-click)* | Launches both Central Dashboards concurrently | [Flask :5000](http://localhost:5000/) & [Gradio :7860](http://localhost:7860/) |
+| **`run_8hour_test.bat`** | Runs 8-Hour Full Endurance Test with Live GNS3 Network Sync | [Flask :5050](http://localhost:5050/) & GNS3 Visual Sync |
 | **`run_hybrid_satellite_demo.bat`** | Runs live JioSpaceFiber dead-zone satellite failover | Interactive Terminal Console |
-| **`run_tests.bat`** | Executes the full 19-test automated test suite | `Ran 19 tests — OK` |
+| **`run_tests.bat`** | Executes the full 26-test automated test suite | `Ran 26 tests — OK` |
 
 ---
 
@@ -78,6 +79,8 @@ flowchart LR
 * **`ai_tracking/safety_core.py`**: Multi-signal risk assessment matrix and speed escalation logic ($80\text{ km/h}$ threshold).
 * **`ai_tracking/huggingface_client.py`**: Non-blocking asynchronous Hugging Face inference pipeline.
 * **`demo_can_telematics.py`**: Standalone terminal CAN-bus speed controller for companion-screen presentations.
+* **`drishti_gns3_live_bridge.py`**: Real-time GNS3 visual network synchronization bridge (canvas node LEDs, reactive labels, and telemetry HUD).
+* **`run_3hour_endurance_test.py`**: Continuous long-duration soak test runner with automated health checkpointing and GNS3 integration.
 
 ---
 
@@ -94,4 +97,4 @@ Run the comprehensive test suite:
 ```powershell
 & ".\.venv\Scripts\python.exe" -m unittest discover tests
 ```
-*19 unit tests passing covering risk calculation, speed escalation, Hugging Face classification, and satellite hex serialization.*
+*26 unit tests passing covering risk calculation, speed escalation, Hugging Face classification, satellite hex serialization, and continuous soak stability.*

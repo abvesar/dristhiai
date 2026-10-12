@@ -28,7 +28,7 @@ def stream_logs(pipe, prefix: str):
 
 def main():
     python_exe = sys.executable
-    flask_port = os.environ.get("DRISHTI_PORT", "5000")
+    flask_port = os.environ.get("DRISHTI_PORT", "5050")
     gradio_port = os.environ.get("GRADIO_PORT", "7860")
 
     print("\n" + "=" * 65)
@@ -41,6 +41,7 @@ def main():
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    env["DRISHTI_PORT"] = flask_port
 
     # 1. Start Flask Dashboard
     flask_proc = subprocess.Popen(
@@ -62,9 +63,32 @@ def main():
         env=env,
     )
 
+    # 3. Start GNS3 Real-Time Visual Bridge (if GNS3 is running)
+    gns3_proc = None
+    try:
+        from drishti_gns3_live_bridge import get_auth
+        import urllib.request
+        auth_hdr = get_auth()
+        req = urllib.request.Request("http://127.0.0.1:3080/v2/version", headers={"Authorization": auth_hdr})
+        with urllib.request.urlopen(req, timeout=1.0):
+            pass
+        gns3_proc = subprocess.Popen(
+            [python_exe, "-u", "drishti_gns3_live_bridge.py"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
+        print(" [3] GNS3 Real-Time Visual Bridge: Synchronizing live telematics to GNS3 window!")
+    except Exception:
+        pass
+
     # Stream logs asynchronously
     threading.Thread(target=stream_logs, args=(flask_proc.stdout, "[FLASK] "), daemon=True).start()
     threading.Thread(target=stream_logs, args=(gradio_proc.stdout, "[GRADIO]"), daemon=True).start()
+    if gns3_proc and gns3_proc.stdout:
+        threading.Thread(target=stream_logs, args=(gns3_proc.stdout, "[GNS3]  "), daemon=True).start()
 
     # Automatically verify server health and open browser tabs once listening
     def open_browsers():
@@ -111,8 +135,8 @@ def main():
     except KeyboardInterrupt:
         print("\n[LAUNCHER] Shutting down both dashboards gracefully...")
     finally:
-        for proc, name in [(flask_proc, "Flask"), (gradio_proc, "Gradio")]:
-            if proc.poll() is None:
+        for proc, name in [(flask_proc, "Flask"), (gradio_proc, "Gradio"), (gns3_proc, "GNS3 Bridge")]:
+            if proc and proc.poll() is None:
                 try:
                     proc.terminate()
                     proc.wait(timeout=2)

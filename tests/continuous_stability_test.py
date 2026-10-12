@@ -138,13 +138,14 @@ class ContinuousStabilityTester:
             except Exception:
                 pass
 
-    def run(self, cycles: int = 20, frames_per_cycle: int = 50, delay_s: float = 0.0) -> bool:
-        """Executes automated continuous testing across cycles.
+    def run(self, cycles: int = 20, frames_per_cycle: int = 50, delay_s: float = 0.0, duration_s: Optional[float] = None) -> bool:
+        """Executes automated continuous testing across cycles or duration.
         
         Args:
-            cycles: Number of testing cycles to run (0 for infinite loop until interrupted).
+            cycles: Number of testing cycles to run (0 for infinite loop or until duration_s).
             frames_per_cycle: Frames to process in each cycle before reporting health telemetry.
             delay_s: Sleep delay in seconds between frames (0 for maximum CPU stress).
+            duration_s: Maximum duration in seconds to run (overrides cycle count).
         
         Returns:
             True if all cycles completed without crashes, False if any unhandled error occurred.
@@ -152,17 +153,23 @@ class ContinuousStabilityTester:
         self.warmup()
         tracemalloc.start()
         self.start_time = time.time()
-        infinite = (cycles <= 0)
+        infinite = (cycles <= 0) and (duration_s is None)
         cycle_idx = 0
 
+        mode_desc = f"{duration_s / 3600:.1f} hours soak" if duration_s else ("Infinite Soak" if infinite else f"{cycles} cycles x {frames_per_cycle} frames ({cycles * frames_per_cycle} total)")
         self.log(
             f"=== STARTING DRISHTI AI CONTINUOUS STABILITY SOAK TEST ===\n"
-            f"Mode: {'Infinite Soak' if infinite else f'{cycles} cycles x {frames_per_cycle} frames ({cycles * frames_per_cycle} total)'} | "
+            f"Mode: {mode_desc} | "
             f"Adversarial Testing: {self.test_adversarial} | Delay: {delay_s}s"
         )
 
         try:
-            while infinite or cycle_idx < cycles:
+            while True:
+                if duration_s is not None and (time.time() - self.start_time) >= duration_s:
+                    self.log(f"[DURATION REACHED] Target soak time ({duration_s}s) elapsed. Concluding test.")
+                    break
+                if not infinite and duration_s is None and cycle_idx >= cycles:
+                    break
                 cycle_idx += 1
                 cycle_start_time = time.time()
                 cycle_errors = 0
@@ -280,7 +287,15 @@ def main() -> int:
     parser.add_argument("--no-adversarial", action="store_true", help="Disable extreme/corrupted frames")
     parser.add_argument("--log-file", default="artifacts/continuous_stability_test.log", help="Log output path")
     parser.add_argument("--dataset-dir", default="dataset", help="Path to evaluation dataset")
+    parser.add_argument("--duration-hours", type=float, default=None, help="Soak test duration in hours (e.g. 3.0)")
+    parser.add_argument("--duration-seconds", type=float, default=None, help="Soak test duration in seconds (e.g. 10800)")
     args = parser.parse_args()
+
+    duration_s = None
+    if args.duration_seconds is not None:
+        duration_s = args.duration_seconds
+    elif args.duration_hours is not None:
+        duration_s = args.duration_hours * 3600.0
 
     tester = ContinuousStabilityTester(
         dataset_dir=Path(args.dataset_dir),
@@ -292,6 +307,7 @@ def main() -> int:
         cycles=args.cycles,
         frames_per_cycle=args.frames_per_cycle,
         delay_s=args.delay,
+        duration_s=duration_s,
     )
 
     return 0 if success else 1
